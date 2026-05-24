@@ -13,7 +13,7 @@ using OpenTelemetry.Trace;
 const string ServiceName = "MessageScreener.Api";
 const string ServiceVersion = "0.1.0";
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services
@@ -72,7 +72,7 @@ builder.Services.AddOpenTelemetry()
             .AddOtlpExporter();
     });
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
@@ -95,9 +95,9 @@ app.MapPost("/webhooks/graph", async (
     ILoggerFactory loggerFactory,
     CancellationToken cancellationToken) =>
 {
-    using var activity = new Activity(ServiceName + ".GraphWebhook").Start();
-    var logger = loggerFactory.CreateLogger("MessageScreener.GraphWebhook");
-    var intakeResult = await intakeService.IntakeAsync(message, cancellationToken);
+    using Activity activity = new Activity(ServiceName + ".GraphWebhook").Start();
+    ILogger logger = loggerFactory.CreateLogger("MessageScreener.GraphWebhook");
+    MessageIntakeResult intakeResult = await intakeService.IntakeAsync(message, cancellationToken);
 
     AppLog.GraphWebhookProcessed(
         logger,
@@ -109,7 +109,7 @@ app.MapPost("/webhooks/graph", async (
 
     if (intakeResult.Accepted && intakeResult.Trigger.ShouldCreateReview)
     {
-        var twinProfile = communicationTwinService.GetInitialProfile();
+        CommunicationTwinProfile twinProfile = communicationTwinService.GetInitialProfile();
         var pendingApprovalReply = callerAutoResponseComposer.ComposePendingApprovalReply(twinProfile.OwnerDisplayName);
 
         await reviewDeliveryService.SendPendingApprovalReplyAsync(message, pendingApprovalReply, cancellationToken);
@@ -118,7 +118,7 @@ app.MapPost("/webhooks/graph", async (
     return Results.Ok(intakeResult);
 });
 
-var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("MessageScreener.Startup");
+ILogger startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("MessageScreener.Startup");
 AppLog.ServiceStarted(startupLogger, ServiceName, ServiceVersion, app.Environment.EnvironmentName);
 
 app.Run();

@@ -3,122 +3,123 @@ using MessageScreener.Contracts;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace MessageScreener.Orchestration;
-
-public sealed class MessageScreenerAgentOptions
+namespace MessageScreener.Orchestration
 {
-    public const string SectionName = "MessageScreener";
-
-    public string OwnerDisplayName { get; init; } = "the owner";
-
-    public string PersonaSummary { get; init; } = "Professional, concise, and direct.";
-
-    public string Tone { get; init; } = "professional";
-
-    public string CommunicationTwinPath { get; init; } = ".message-screener/communication-twin.json";
-
-    public string CommunicationTwinSkillPath { get; init; } = ".message-screener/skills/communication-twin.skill.md";
-}
-
-public interface ICommunicationTwinService
-{
-    CommunicationTwinProfile GetInitialProfile();
-}
-
-public sealed class CommunicationTwinService(
-    IOptions<MessageScreenerAgentOptions> options,
-    ILogger<CommunicationTwinService> logger) : ICommunicationTwinService
-{
-    private static readonly JsonSerializerOptions JsonSerializerOptions = new()
+    public sealed class MessageScreenerAgentOptions
     {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true,
-    };
+        public const string SectionName = "MessageScreener";
 
-    public CommunicationTwinProfile GetInitialProfile()
-    {
-        MessageScreenerAgentOptions current = options.Value;
-        string communicationTwinPath = ResolveCommunicationTwinPath(current.CommunicationTwinPath);
+        public string OwnerDisplayName { get; init; } = "the owner";
 
-        if (!File.Exists(communicationTwinPath))
-        {
-            CommunicationTwinLog.TwinFileMissing(communicationTwinPath, logger);
-            return BuildDefaultProfile(current);
-        }
+        public string PersonaSummary { get; init; } = "Professional, concise, and direct.";
 
-        string json = File.ReadAllText(communicationTwinPath);
-        CommunicationTwinFileModel? twin = JsonSerializer.Deserialize<CommunicationTwinFileModel>(json, JsonSerializerOptions);
+        public string Tone { get; init; } = "professional";
 
-        if (twin is null || string.IsNullOrWhiteSpace(twin.OwnerDisplayName))
-        {
-            CommunicationTwinLog.TwinFileInvalid(communicationTwinPath, logger);
-            return BuildDefaultProfile(current);
-        }
+        public string CommunicationTwinPath { get; init; } = ".message-screener/communication-twin.json";
 
-        string[] preferredPhrases = twin.PreferredPhrases ??
-        [
-            "Thanks for reaching out.",
-            "I can help with that.",
-            "Here is the fastest path forward.",
-        ];
-
-        string[] avoidPhrases = twin.AvoidPhrases ??
-        [
-            "Just looping back",
-            "Per my previous email",
-            "No worries",
-        ];
-
-        CommunicationTwinLog.TwinFileLoaded(communicationTwinPath, logger);
-
-        return new CommunicationTwinProfile(
-            OwnerDisplayName: twin.OwnerDisplayName,
-            PersonaSummary: twin.PersonaSummary ?? current.PersonaSummary,
-            PreferredPhrases: preferredPhrases,
-            AvoidPhrases: avoidPhrases,
-            Tone: twin.Tone ?? current.Tone);
+        public string CommunicationTwinSkillPath { get; init; } = ".message-screener/skills/communication-twin.skill.md";
     }
 
-    private static CommunicationTwinProfile BuildDefaultProfile(MessageScreenerAgentOptions current)
+    public interface ICommunicationTwinService
     {
-        return new CommunicationTwinProfile(
-            OwnerDisplayName: current.OwnerDisplayName,
-            PersonaSummary: current.PersonaSummary,
-            PreferredPhrases:
+        CommunicationTwinProfile GetInitialProfile();
+    }
+
+    public sealed class CommunicationTwinService(
+        IOptions<MessageScreenerAgentOptions> options,
+        ILogger<CommunicationTwinService> logger) : ICommunicationTwinService
+    {
+        private static readonly JsonSerializerOptions JsonSerializerOptions = new()
+        {
+            PropertyNameCaseInsensitive = true,
+            WriteIndented = true,
+        };
+
+        public CommunicationTwinProfile GetInitialProfile()
+        {
+            MessageScreenerAgentOptions current = options.Value;
+            var communicationTwinPath = ResolveCommunicationTwinPath(current.CommunicationTwinPath);
+
+            if (!File.Exists(communicationTwinPath))
+            {
+                CommunicationTwinLog.TwinFileMissing(communicationTwinPath, logger);
+                return BuildDefaultProfile(current);
+            }
+
+            var json = File.ReadAllText(communicationTwinPath);
+            CommunicationTwinFileModel? twin = JsonSerializer.Deserialize<CommunicationTwinFileModel>(json, JsonSerializerOptions);
+
+            if (twin is null || string.IsNullOrWhiteSpace(twin.OwnerDisplayName))
+            {
+                CommunicationTwinLog.TwinFileInvalid(communicationTwinPath, logger);
+                return BuildDefaultProfile(current);
+            }
+
+            var preferredPhrases = twin.PreferredPhrases ??
             [
                 "Thanks for reaching out.",
                 "I can help with that.",
                 "Here is the fastest path forward.",
-            ],
-            AvoidPhrases:
+            ];
+
+            var avoidPhrases = twin.AvoidPhrases ??
             [
                 "Just looping back",
                 "Per my previous email",
                 "No worries",
-            ],
-            Tone: current.Tone);
-    }
+            ];
 
-    private static string ResolveCommunicationTwinPath(string configuredPath)
-    {
-        if (Path.IsPathRooted(configuredPath))
-        {
-            return configuredPath;
+            CommunicationTwinLog.TwinFileLoaded(communicationTwinPath, logger);
+
+            return new CommunicationTwinProfile(
+                OwnerDisplayName: twin.OwnerDisplayName,
+                PersonaSummary: twin.PersonaSummary ?? current.PersonaSummary,
+                PreferredPhrases: preferredPhrases,
+                AvoidPhrases: avoidPhrases,
+                Tone: twin.Tone ?? current.Tone);
         }
 
-        return Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), configuredPath));
+        private static CommunicationTwinProfile BuildDefaultProfile(MessageScreenerAgentOptions current)
+        {
+            return new CommunicationTwinProfile(
+                OwnerDisplayName: current.OwnerDisplayName,
+                PersonaSummary: current.PersonaSummary,
+                PreferredPhrases:
+                [
+                    "Thanks for reaching out.",
+                    "I can help with that.",
+                    "Here is the fastest path forward.",
+                ],
+                AvoidPhrases:
+                [
+                    "Just looping back",
+                    "Per my previous email",
+                    "No worries",
+                ],
+                Tone: current.Tone);
+        }
+
+        private static string ResolveCommunicationTwinPath(string configuredPath)
+        {
+            if (Path.IsPathRooted(configuredPath))
+            {
+                return configuredPath;
+            }
+
+            return Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), configuredPath));
+        }
     }
-}
 
-internal sealed class CommunicationTwinFileModel
-{
-    public string OwnerDisplayName { get; init; } = string.Empty;
+    internal sealed class CommunicationTwinFileModel
+    {
+        public string OwnerDisplayName { get; init; } = string.Empty;
 
-    public string? PersonaSummary { get; init; }
+        public string? PersonaSummary { get; init; }
 
-    public string[]? PreferredPhrases { get; init; }
+        public string[]? PreferredPhrases { get; init; }
 
-    public string[]? AvoidPhrases { get; init; }
+        public string[]? AvoidPhrases { get; init; }
 
-    public string? Tone { get; init; }
+        public string? Tone { get; init; }
+    }
 }
