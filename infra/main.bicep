@@ -18,9 +18,6 @@ param teamsBotId string = ''
 var suffix = toLower(uniqueString(resourceGroup().id, environmentName))
 var acrName = 'acr${take(replace(environmentName, '-', ''), 15)}${take(suffix, 8)}'
 var logAnalyticsName = 'log-${environmentName}-${take(suffix, 6)}'
-var appInsightsName = 'appi-${environmentName}-${take(suffix, 6)}'
-var keyVaultName = 'kv-${environmentName}-${take(suffix, 6)}'
-var storageName = 'st${take(replace(environmentName, '-', ''), 10)}${take(suffix, 10)}'
 var containerAppsEnvironmentName = 'cae-${environmentName}'
 var userAssignedIdentityName = 'id-${environmentName}-app'
 var containerAppName = 'api-${environmentName}'
@@ -43,53 +40,6 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09
     features: {
       enableLogAccessUsingOnlyResourcePermissions: true
     }
-  }
-}
-
-resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
-  name: appInsightsName
-  location: location
-  kind: 'web'
-  tags: tags
-  properties: {
-    Application_Type: 'web'
-    WorkspaceResourceId: logAnalyticsWorkspace.id
-    IngestionMode: 'LogAnalytics'
-  }
-}
-
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: keyVaultName
-  location: location
-  tags: tags
-  properties: {
-    enableRbacAuthorization: true
-    enabledForDeployment: false
-    enabledForTemplateDeployment: false
-    enabledForDiskEncryption: false
-    tenantId: subscription().tenantId
-    sku: {
-      family: 'A'
-      name: 'standard'
-    }
-    publicNetworkAccess: 'Enabled'
-    softDeleteRetentionInDays: 90
-  }
-}
-
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
-  name: storageName
-  location: location
-  tags: tags
-  kind: 'StorageV2'
-  sku: {
-    name: 'Standard_LRS'
-  }
-  properties: {
-    accessTier: 'Hot'
-    minimumTlsVersion: 'TLS1_2'
-    allowBlobPublicAccess: false
-    supportsHttpsTrafficOnly: true
   }
 }
 
@@ -158,10 +108,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           }
           env: [
             {
-              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-              value: appInsights.properties.ConnectionString
-            }
-            {
               name: 'MessageScreener__Teams__ManagedIdentityClientId'
               value: userAssignedIdentity.properties.clientId
             }
@@ -186,26 +132,6 @@ resource acrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' 
   }
 }
 
-resource keyVaultSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, userAssignedIdentity.properties.principalId, 'keyvault-secrets-user')
-  scope: keyVault
-  properties: {
-    principalId: userAssignedIdentity.properties.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource storageBlobContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(storageAccount.id, userAssignedIdentity.properties.principalId, 'storage-blob-data-contributor')
-  scope: storageAccount
-  properties: {
-    principalId: userAssignedIdentity.properties.principalId
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
-    principalType: 'ServicePrincipal'
-  }
-}
-
 output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = containerAppsEnvironment.name
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.properties.loginServer
 output AZURE_CONTAINER_REGISTRY_NAME string = containerRegistry.name
@@ -218,7 +144,4 @@ output MESSAGE_SCREENER_TEAMS_APP_ID string = teamsAppId
 output MESSAGE_SCREENER_TEAMS_BOT_ID string = teamsBotId
 
 output MESSAGE_SCREENER_MANAGED_IDENTITY_CLIENT_ID string = userAssignedIdentity.properties.clientId
-output AZURE_KEY_VAULT_NAME string = keyVault.name
 output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = logAnalyticsWorkspace.name
-output AZURE_APPLICATION_INSIGHTS_NAME string = appInsights.name
-output AZURE_STORAGE_ACCOUNT_NAME string = storageAccount.name

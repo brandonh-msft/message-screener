@@ -81,15 +81,11 @@ This single script resolves azd environment values and generates the Teams manif
 - Azure Container Apps environment and API container app
 - User-assigned managed identity for workload auth
 - Azure Container Registry for image deployment
-- Azure Key Vault for secret management
-- Log Analytics workspace and Application Insights
-- Storage account for durable v1 data needs (audit/interaction artifacts)
+- Log Analytics workspace for container app diagnostics
 
 The template also creates role assignments for the app identity:
 
 - `AcrPull` on ACR
-- `Key Vault Secrets User` on Key Vault
-- `Storage Blob Data Contributor` on Storage
 
 ### azd Environment Inputs
 
