@@ -21,7 +21,6 @@
     <ProjectReference Include="..\MessageScreener.Contracts\MessageScreener.Contracts.csproj" />
     <ProjectReference Include="..\MessageScreener.Orchestration\MessageScreener.Orchestration.csproj" />
     <ProjectReference Include="..\MessageScreener.ReviewDelivery\MessageScreener.ReviewDelivery.csproj" />
-    <ProjectReference Include="..\MessageScreener.Audit\MessageScreener.Audit.csproj" />
   </ItemGroup>
 
 </Project>
