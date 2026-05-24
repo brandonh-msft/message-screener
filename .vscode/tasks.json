@@ -1,0 +1,23 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "setup: communication twin",
+      "type": "shell",
+      "command": "pwsh ./scripts/setup.ps1",
+      "problemMatcher": []
+    },
+    {
+      "label": "build: solution",
+      "type": "shell",
+      "command": "dotnet build MessageScreener.slnx -warnaserror",
+      "problemMatcher": [
+        "$msCompile"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
