@@ -40,6 +40,7 @@ This repository includes a dev container with the tooling needed for setup, buil
 - Azure CLI
 - Azure Developer CLI (azd)
 - GitHub CLI
+- GitHub Copilot CLI (`copilot`)
 
 Open the repo in the dev container and the post-create bootstrap will restore dependencies and install azd if needed.
 

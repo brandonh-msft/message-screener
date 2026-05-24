@@ -12,11 +12,22 @@ if ! command -v azd >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v copilot >/dev/null 2>&1; then
+  echo "Installing GitHub Copilot CLI..."
+  npm install --global @github/copilot
+fi
+
+if ! command -v copilot >/dev/null 2>&1; then
+  echo "ERROR: GitHub Copilot CLI is required but is not available on PATH after installation." >&2
+  exit 1
+fi
+
 echo "Toolchain versions:"
 dotnet --version
 az version | head -n 1 || true
 gh --version | head -n 1 || true
 azd version || true
+copilot --version || true
 pwsh --version
 
 echo "Restoring solution dependencies..."
