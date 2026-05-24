@@ -4,14 +4,10 @@ services:
   api:
     project: ./src/MessageScreener.Api
     language: dotnet
-    host: appservice
+    host: containerapp
 
 hooks:
-  postprovision:
-    shell: pwsh
-    run: ./scripts/azd-generate-teams-manifest.ps1 -Hook postprovision
-    continueOnError: false
   postdeploy:
     shell: pwsh
-    run: ./scripts/azd-generate-teams-manifest.ps1 -Hook postdeploy
+    run: ./scripts/azd-generate-teams-manifest.ps1
     continueOnError: false

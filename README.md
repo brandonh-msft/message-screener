@@ -65,10 +65,39 @@ dotnet build MessageScreener.slnx -warnaserror
 
 Deployment is expected to run through Azure Developer CLI (`azd`).
 
-`azure.yaml` defines both `postprovision` and `postdeploy` hooks that call:
+`azure.yaml` defines a `postdeploy` hook that calls:
 
 ```powershell
 pwsh ./scripts/azd-generate-teams-manifest.ps1
+```
+
+This single script resolves azd environment values and generates the Teams manifest directly.
+
+### Provisioned v1 Infrastructure
+
+`infra/main.bicep` provisions the baseline required for v1:
+
+- Azure Container Apps environment and API container app
+- User-assigned managed identity for workload auth
+- Azure Container Registry for image deployment
+- Azure Key Vault for secret management
+- Log Analytics workspace and Application Insights
+- Storage account for durable v1 data needs (audit/interaction artifacts)
+
+The template also creates role assignments for the app identity:
+
+- `AcrPull` on ACR
+- `Key Vault Secrets User` on Key Vault
+- `Storage Blob Data Contributor` on Storage
+
+### azd Environment Inputs
+
+Set these before running `azd up`:
+
+```powershell
+azd env set AZURE_LOCATION eastus
+azd env set MESSAGE_SCREENER_TEAMS_APP_ID <teams-app-id>
+azd env set MESSAGE_SCREENER_TEAMS_BOT_ID <bot-client-id>
 ```
 
 When required environment values are present, the hook generates:
