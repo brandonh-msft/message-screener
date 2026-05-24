@@ -5,4 +5,10 @@
     <Project Path="src/MessageScreener.Orchestration/MessageScreener.Orchestration.csproj" />
     <Project Path="src/MessageScreener.ReviewDelivery/MessageScreener.ReviewDelivery.csproj" />
   </Folder>
+  <Folder Name="/infra/">
+    <File Path="azure.yaml" />
+    <File Path="infra/main.bicep" />
+    <File Path="infra/main.parameters.json" />
+    <File Path="scripts/azd-generate-teams-manifest.ps1" />
+  </Folder>
 </Solution>
