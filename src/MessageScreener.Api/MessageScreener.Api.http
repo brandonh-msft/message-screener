@@ -1,0 +1,6 @@
+@MessageScreener.Api_HostAddress = http://localhost:5170
+
+GET {{MessageScreener.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
