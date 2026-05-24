@@ -22,16 +22,25 @@ This agent addresses two co-equal goals:
    the most relevant internal subject matter expert (SME) and surface a pre-composed
    introduction forward so the user can route the question with a single action.
 
+## Delivery Phasing Decision
+
+To reduce initial implementation risk and reach production value faster, delivery is intentionally phased:
+
+- **v1 (Teams-first):** inbound Teams direct messages only, Teams-based draft/review/loop-in flows, and Teams-native notifications.
+- **v2 (Email expansion):** adds Outlook inbound direct-To processing and Outlook draft handling while preserving v1 behavior.
+
+The phased model supersedes the original full-scope-v1 assumption.
+
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                          Inbound Message Arrives                         │
-│                        (Teams DM or Outlook direct To:)                  │
+│                     (v1: Teams DM, v2+: + Outlook direct To:)            │
 └───────────────────────────────┬──────────────────────────────────────────┘
                                 │
                                 ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                  Contact History Check (cross-channel)                   │
-│          Is sender known with interaction within recency window?         │
+│                  Contact History Check (phased by channel)               │
+│      Is sender known with interaction within configured recency window?  │
 └─────────────┬────────────────────────────────────────┬───────────────────┘
               │ YES — known/recent                      │ NO — cold/unknown
               ▼                                         ▼
@@ -69,8 +78,8 @@ This agent addresses two co-equal goals:
                                │
                                ▼
               ┌─────────────────────────────────────────────┐
-              │   Save Draft → Outlook Drafts / Teams       │
-              │   composed deep-link                        │
+              │   Save Draft → Teams composed deep-link     │
+              │   (v2 adds Outlook Drafts support)          │
               │   Send Adaptive Card notification:          │
               │   • Draft inline + confidence score         │
               │   • Inline citations for factual claims     │
@@ -83,20 +92,26 @@ This agent addresses two co-equal goals:
 
 ## Requirements
 
+**Platform and Implementation Constraints**
+
+- PC1. All implementation code MUST target **.NET 10** and modern C# language features supported by the .NET 10 SDK.
+- PC2. The service MUST follow the user's digital-twin engineering preferences: managed identity-first authentication, OpenTelemetry-first observability (traces, metrics, logs), source-generated structured logging, and production-safe defaults (no hidden auto-send or implicit side effects).
+- PC3. All telemetry and logging for agent and model workflows SHOULD follow OpenTelemetry GenAI semantic conventions where applicable.
+
 **Trigger and Routing**
 
-- R1. The agent MUST monitor Microsoft Teams direct messages and Outlook emails where the
-  user's primary SMTP address appears in the `To:` field. CC'd, BCC'd, and mailing-list-
-  routed messages are excluded.
+- R1. The agent MUST monitor Microsoft Teams direct messages in v1. In v2, the agent MUST
+  additionally monitor Outlook emails where the user's primary SMTP address appears in the
+  `To:` field. CC'd, BCC'd, and mailing-list-routed messages are excluded.
   - *Note:* BCC detection is best-effort — when a user is BCC'd, the received copy has the
     BCC header stripped and the message is indistinguishable from a direct `To:` message.
     The spam/genuine classifier (R4) serves as a secondary filter for bulk BCC traffic.
-- R2. The agent MUST check cross-channel interaction history when a message arrives. A sender
-  is "known and recent" if there has been any interaction (send or receive) across email or
-  Teams within the configured recency window (default: 6 months). Messages from known-and-
-  recent senders are silently ignored.
-- R2a. The agent MUST implement a cross-channel identity resolver that maps Teams AAD UPNs
-  and email SMTP addresses to a canonical contact ID using Graph `/users?$filter=proxyAddresses`
+- R2. The agent MUST check interaction history when a message arrives. In v1, recency is
+  evaluated against Teams interactions only. In v2, recency becomes cross-channel (email and
+  Teams). Messages from known-and-recent senders are silently ignored.
+- R2a. The agent MUST implement a canonical identity resolver. In v1, Teams identities are
+  normalized to a canonical contact ID. In v2, resolver scope expands to map Teams AAD UPNs
+  and email SMTP addresses to the same canonical ID using Graph `/users?$filter=proxyAddresses`
   lookups. When resolution fails, the agent MUST treat the message as cold and flag the
   contact as unresolved, surfacing a disambiguation prompt to the user on the Adaptive Card.
 - R2b. When sender identity cannot be resolved to a known AAD principal, the Adaptive Card
@@ -128,12 +143,14 @@ This agent addresses two co-equal goals:
 - R5a. Each factual claim in the draft that is sourced from the knowledge base MUST carry an
   inline citation visible to the user during review (source document, email thread, or commit
   link). Claims with no traceable source MUST be marked `[unverified]`.
-- R6. The knowledge base used to compose replies MUST include:
-  - Outlook email history
+- R6. The knowledge base used to compose replies MUST include Teams message history in v1,
+  and MUST add Outlook email history in v2.
   - Teams message history
+  - Outlook email history (v2)
   - SharePoint / OneDrive documents
   - GitHub repositories the user has access to
-  - Corpus bounds (all configurable): email and Teams history within the past 2 years
+  - Corpus bounds (all configurable): Teams history within the past 2 years in v1; email and
+    Teams history within the past 2 years in v2
     (default); SharePoint sites the user has explicitly pinned; GitHub repos the user
     has committed to in the past 12 months (default).
 - R7. When the agent cannot assemble a confident, complete reply, it MUST produce a partial
@@ -156,7 +173,7 @@ This agent addresses two co-equal goals:
 
 - R9. Upon saving a genuine draft, the agent MUST deliver a Teams Adaptive Card notification
   containing:
-  - Sender name, channel (Teams / Email), and message preview
+  - Sender name, channel, and message preview (v1 channel set: Teams)
   - The full draft reply inline
   - Confidence score (R7a)
   - Inline citations for sourced claims (R5a)
@@ -164,29 +181,32 @@ This agent addresses two co-equal goals:
   - For low-confidence drafts: up to 3 SME suggestions (see R22)
   - Action buttons: **Approve**, **Edit**, **Discard**
   - For low-confidence drafts: a **Loop in [SME Name]** button per suggested expert (see R23)
-- R10. **Approve** behavior varies by channel:
-  - *Email*: moves the draft to the user's **Outlook Drafts folder**. The user manually
-    clicks Send in Outlook.
-  - *Teams*: opens a pre-populated Teams compose deep-link
+- R10. **Approve** behavior is channel-specific by phase:
+  - *v1 Teams*: opens a pre-populated Teams compose deep-link
     (`teams://l/chat/...?message=<encoded-draft>`). The user clicks Send from the compose
     box. Teams exposes no staged-send or draft API; the deep-link is the only supported
     mechanism.
-- R11. **Edit** opens the draft in the relevant native client (Outlook for email, Teams
-  compose for chat) for inline editing before sending.
+  - *v2 Email*: moves the draft to the user's **Outlook Drafts folder**. The user manually
+    clicks Send in Outlook.
+- R11. **Edit** opens the draft in the relevant native client (v1: Teams compose; v2 adds
+  Outlook for email) for inline editing before sending.
 - R12. **Discard** deletes the draft and dismisses the notification card.
 - R13. Spam-classified messages MUST produce a compact Adaptive Card (per R4a) distinct from
   the full genuine draft card. This card MUST NOT include a draft reply or knowledge
   citations — only sender info, message preview, spam classification rationale, **Discard**,
   and **Reclassify as Genuine**.
 - R14. If Teams Adaptive Card delivery fails or the user is offline for longer than a
-  configurable threshold (default: 30 minutes), the agent MUST fall back to an email
-  notification containing a summary and a deep link to the draft. The fallback channel MUST
-  be configurable.
+  configurable threshold (default: 30 minutes), the agent MUST fall back to a configurable
+  notification channel.
+  - v1 default fallback: Teams retry with elevated notification.
+  - v2 default fallback: email summary with deep link to the draft.
 
 **Style Model**
 
-- R15. The user's writing style MUST be derived automatically from existing email and Teams
-  message history — no manual persona document required.
+- R15. The user's writing style MUST be derived automatically from historical communications.
+  - v1 source set: Teams message history.
+  - v2 source set: Teams and email history.
+  No manual persona document is required.
 - R16. The user MUST be able to specify exclusion scopes for style-model ingestion (e.g.,
   folders, date ranges, or sensitivity-label classes). The system MUST default to excluding
   messages bearing Microsoft Purview sensitivity labels of **Confidential** or higher.
@@ -195,16 +215,21 @@ This agent addresses two co-equal goals:
 
 **Contact History**
 
-- R18. The agent MUST maintain a unified cross-channel interaction log (canonical contact ID,
-  channel, timestamp) used for the recency check in R2.
+- R18. The agent MUST maintain an interaction log (canonical contact ID, channel, timestamp)
+  used for the recency check in R2.
+  - v1: Teams channel entries only.
+  - v2: unified cross-channel entries (Teams + email).
 - R18a. On first activation, the agent MUST perform a one-time backfill of the interaction
-  log by scanning Outlook Sent Items and Teams message history for the configured recency
-  window before enabling live webhook monitoring. The agent MUST display a
+  log for in-scope channels before enabling live webhook monitoring.
+  - v1: Teams message history.
+  - v2: Teams message history plus Outlook Sent Items.
+  The agent MUST display a
   backfill-in-progress state and MUST defer message processing until backfill completes (or
   document its behavior when backfill is incomplete at time of first message arrival).
 - R19. The interaction log MUST be updated after the user sends any reply, regardless of
-  whether the agent was involved. This requires separate Graph change notification
-  subscriptions on SentItems and outbound Teams messages; see R-W1.
+  whether the agent was involved.
+  - v1 requires outbound Teams message tracking.
+  - v2 adds SentItems tracking.
 - R20. When the user acts on a **Loop-in** forward (R23), the forwarded-to SME is NOT added
   to the user's interaction log for the original sender. If the SME later initiates direct
   contact with the user, that interaction IS added to the log as a new contact relationship.
@@ -214,7 +239,8 @@ This agent addresses two co-equal goals:
 - R21. When a low-confidence draft is produced, the agent MUST search internal sources in
   parallel to identify up to 3 colleagues most likely to answer the question. Sources:
   - Microsoft 365 People API / org directory (role, title, org-chart proximity)
-  - Email and Teams threads related to the inbound message's topic
+  - Teams threads related to the inbound message's topic (v1)
+  - Email and Teams threads related to the inbound message's topic (v2)
   - Code ownership signals (CODEOWNERS files, commit/PR authorship, GitHub review history)
   - SharePoint document authorship on topics matching the message
 - R22. For each suggested SME, the Adaptive Card MUST display:
@@ -223,7 +249,7 @@ This agent addresses two co-equal goals:
     the auth module", "Active in the Teams channel for this product area")
   - **In Teams notifications**: the SME's name MUST be rendered as a Teams Contact Info card
     link so the user can view their full profile and contact options without leaving Teams.
-  - **In email fallback notifications** (R14): the SME's name MUST be rendered as a
+  - **In email fallback notifications** (R14, v2): the SME's name MUST be rendered as a
     `mailto:` link using their primary email address.
 - R23. The **Loop in [SME Name]** card action creates a pre-composed forward of the original
   inbound message addressed to the selected SME. This MUST be a **separate draft object**
@@ -241,9 +267,13 @@ This agent addresses two co-equal goals:
 **Reliability**
 
 - R24. The agent MUST proactively renew Graph change notification subscriptions before their
-  expiry (email subscriptions: ~4,230 min; Teams chat subscriptions: ~60 min).
-- R25. If subscription renewal fails, the agent MUST notify the user via Teams (or email
-  fallback) that monitoring is paused, with a **Re-activate** button.
+  expiry.
+  - v1 baseline: Teams chat subscriptions (~60 min).
+  - v2 additional: email subscriptions (~4,230 min).
+- R25. If subscription renewal fails, the agent MUST notify the user that monitoring is
+  paused, with a **Re-activate** button.
+  - v1 notification channel: Teams.
+  - v2: Teams primary with configurable email fallback.
 - R26. On restart or recovery from a monitoring gap, the agent MUST back-fill any messages
   received during the gap via Graph delta-query polling before resuming live processing.
 - R27. The agent MUST complete spam/genuine classification, draft generation, SME lookup (if
@@ -294,14 +324,16 @@ This agent addresses two co-equal goals:
   captured via an Adaptive Card feedback action. Target: median edit distance <15% of draft
   length by week 4.
 - Zero messages are auto-sent without explicit user action.
-- The recency window accurately reflects cross-channel history — a sender emailed last month
-  is not incorrectly flagged as cold.
+- v1: The recency window accurately reflects Teams interaction history.
+- v2: The recency window accurately reflects cross-channel history — a sender emailed last
+  month is not incorrectly flagged as cold.
 - No Confidential-or-above content appears in any draft destined for an external recipient.
 
 ## Scope Boundaries
 
-- The agent monitors Teams **direct messages** only; group/channel messages are excluded.
-- The agent processes emails where the user appears in `To:` only; CC, BCC, and mailing-list
+- **v1 boundary:** The agent monitors Teams **direct messages** only; group/channel messages,
+  email intake, and non-Teams channels are excluded.
+- **v2 expansion:** Adds emails where the user appears in `To:` only; CC, BCC, and mailing-list
   routing are excluded (BCC exclusion is best-effort per R1 note).
 - The agent NEVER auto-sends under any circumstances.
 - Calendar invites, task assignments, and non-message channels are out of scope for v1.
@@ -314,15 +346,17 @@ This agent addresses two co-equal goals:
 
 ## Key Decisions
 
-- **Cross-channel unified interaction log**: Avoids the false-cold case where an active email
-  correspondent messages via Teams for the first time.
+- **Phased delivery (Teams-first):** v1 is Teams-only to reduce delivery risk and dependency
+  surface; v2 adds email once Teams workflow quality and reliability are proven.
+- **Interaction-log phasing:** v1 tracks Teams interactions; v2 promotes to cross-channel to
+  avoid false-cold cases across Teams and email.
 - **SME routing is v1**: Core to the value proposition; a low-confidence draft alone is not
   sufficient when the agent cannot answer well.
 - **Teams compose deep-link, not draft API**: Teams exposes no API for staging a draft or
   send-queue. The deep-link pre-populates the compose box; the user sends manually. This
   preserves the no-auto-send guarantee.
-- **Approve → Outlook Drafts (not Outbox)**: The Outbox auto-transmits on next sync,
-  violating the no-auto-send guarantee. Drafts folder is the correct target.
+- **Approve behavior by phase:** v1 uses Teams compose deep-link only; v2 adds Outlook Drafts
+  (never Outbox) for email.
 - **Auto-mined style model**: Lower setup friction than a persona document; the agent learns
   from real communication patterns with sensitivity-label exclusions.
 - **AI disclosure footer default ON**: Legal and trust alignment (EU AI Act); configurable
@@ -330,14 +364,15 @@ This agent addresses two co-equal goals:
 - **SME Contact Info / mailto links**: Teams notifications link to the SME's Contact Info
   card for in-context profile access; email fallback notifications use mailto: links. Both
   avoid copy-paste friction while respecting channel context.
-- **Full-scope v1 (no phasing)**: All subsystems — trigger, classifier, RAG indexer, style
-  model, interaction log, SME routing — are in-scope for v1. No deliberate phasing.
+- **.NET 10 implementation baseline:** all production code targets .NET 10 and follows modern
+  C# patterns plus digital-twin preferences (managed identity, OTel-first telemetry,
+  source-generated logging).
 - **New repository tree**: Standalone agent service; not embedded in the existing
   `message-screener` repo.
 
 ## Dependencies / Assumptions
 
-- The user has a Microsoft 365 account with Graph API access for Teams and Outlook.
+- The user has a Microsoft 365 account with Graph API access for Teams (v1) and Outlook (v2).
 - Graph change notification (webhook) subscriptions are available for the user's tenant;
   Teams chat subscriptions expire at ~60 minutes and require frequent renewal (R24).
 - The agent requires admin consent for org-scoped Graph scopes (People.Read.All,
@@ -347,8 +382,8 @@ This agent addresses two co-equal goals:
   Adaptive Card delivery is possible (Teams platform requirement).
 - GitHub access tokens are available for repository indexing; these MUST be stored per R-SEC-3.
 - The agent host MUST remain warm (not cold-start serverless) to meet R27's latency target.
-- Outbound interaction tracking (R19) requires separate Graph subscriptions on SentItems
-  (Mail.Read) and outbound Teams messages (Chat.Read) with independent renewal cycles.
+- Outbound interaction tracking (R19) requires outbound Teams tracking in v1 and adds SentItems
+  (Mail.Read) in v2, each with independent renewal cycles.
 
 ## Outstanding Questions
 
@@ -374,6 +409,14 @@ This agent addresses two co-equal goals:
   authorship, and GitHub code ownership into a confidence-ranked SME list (up to 3)?
 - [Affects R-SEC-2] [Technical] Delegated refresh token storage vs. application-permission
   grant — which is appropriate given the always-on monitoring requirement and tenant policy?
+
+## Phase Exit Criteria
+
+- **v1 -> v2 gate:**
+  - Teams-only flow meets latency and quality success criteria for 2 consecutive weeks.
+  - Zero auto-send violations and zero unresolved security-severity incidents.
+  - Subscription renewal and gap-recovery reliability demonstrated in restart/chaos tests.
+  - Permission scope ledger approved for adding Outlook ingestion and draft operations.
 
 ## Next Steps
 
