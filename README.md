@@ -100,6 +100,13 @@ azd env set MESSAGE_SCREENER_TEAMS_BOT_ID <bot-client-id>
 When required environment values are present, the hook generates:
 
 - `.message-screener/deploy/<env>/teamsapp/manifest.json`
+- `.message-screener/deploy/<env>/message-screener-teamsapp.zip`
+
+The zip package is ready for Teams app upload and contains:
+
+- `manifest.json`
+- `color.png`
+- `outline.png`
 
 Expected azd environment values:
 

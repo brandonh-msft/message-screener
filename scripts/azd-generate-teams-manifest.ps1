@@ -82,7 +82,56 @@ function New-TeamsManifest {
     Set-Content -Path $manifestPath -Value $manifestJson -Encoding utf8
 
     Write-Host "Generated Teams manifest at $manifestPath"
-    Write-Host 'Note: Add color.png and outline.png to the same teamsapp folder before packaging the app.'
+    Write-Host 'Packaging will include img/color.png and img/outline.png.'
+
+    return $manifestPath
+}
+
+function New-TeamsAppPackage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$OutputDirectory,
+        [Parameter(Mandatory = $true)]
+        [string]$ManifestPath,
+        [Parameter(Mandatory = $true)]
+        [string]$ColorIconPath,
+        [Parameter(Mandatory = $true)]
+        [string]$OutlineIconPath,
+        [Parameter(Mandatory = $true)]
+        [string]$PackageName
+    )
+
+    if (-not (Test-Path $ManifestPath)) {
+        throw "Manifest not found: $ManifestPath"
+    }
+
+    if (-not (Test-Path $ColorIconPath)) {
+        throw "Required Teams icon not found: $ColorIconPath"
+    }
+
+    if (-not (Test-Path $OutlineIconPath)) {
+        throw "Required Teams icon not found: $OutlineIconPath"
+    }
+
+    $stagingDirectory = Join-Path $OutputDirectory 'teamsapp-package'
+    if (Test-Path $stagingDirectory) {
+        Remove-Item -Path $stagingDirectory -Recurse -Force
+    }
+
+    New-Item -Path $stagingDirectory -ItemType Directory | Out-Null
+
+    Copy-Item -Path $ManifestPath -Destination (Join-Path $stagingDirectory 'manifest.json') -Force
+    Copy-Item -Path $ColorIconPath -Destination (Join-Path $stagingDirectory 'color.png') -Force
+    Copy-Item -Path $OutlineIconPath -Destination (Join-Path $stagingDirectory 'outline.png') -Force
+
+    $packagePath = Join-Path $OutputDirectory $PackageName
+    if (Test-Path $packagePath) {
+        Remove-Item -Path $packagePath -Force
+    }
+
+    Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $packagePath -CompressionLevel Optimal
+
+    return $packagePath
 }
 
 function Get-FirstNonEmptyValue {
@@ -129,10 +178,21 @@ if ([string]::IsNullOrWhiteSpace($baseUrl) -or [string]::IsNullOrWhiteSpace($tea
 }
 
 $outputDirectory = Join-Path $repoRoot ".message-screener/deploy/$envName"
-New-TeamsManifest `
+$manifestPath = New-TeamsManifest `
     -OutputDirectory $outputDirectory `
     -BaseUrl $baseUrl `
     -TeamsAppId $teamsAppId `
     -BotId $botId
 
+$colorIconPath = Join-Path $repoRoot 'img/color.png'
+$outlineIconPath = Join-Path $repoRoot 'img/outline.png'
+
+$packagePath = New-TeamsAppPackage `
+    -OutputDirectory $outputDirectory `
+    -ManifestPath $manifestPath `
+    -ColorIconPath $colorIconPath `
+    -OutlineIconPath $outlineIconPath `
+    -PackageName 'message-screener-teamsapp.zip'
+
 Write-Host "Teams manifest generation completed for azd environment '$envName'."
+Write-Host "Teams app package created at: $packagePath"
