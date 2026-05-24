@@ -1,6 +1,7 @@
 param(
     [string]$CopilotCliPath = "copilot",
     [string]$CopilotCommand = "chat",
+    [string]$CopilotModel,
     [switch]$Force
 )
 
@@ -38,7 +39,9 @@ if ((Test-Path $communicationTwinPath) -and -not $Force) {
 $prompt = @"
 You are generating a communication twin profile for Message Screener.
 
-Use WorkIQ to analyze the user's recent Teams messages and emails.
+Focus only on communication style. Use WorkIQ to analyze the user's recent Teams messages and emails.
+Also consider communication-related writing patterns visible in public code and docs from brandonh-msft and bc3tech repositories.
+Do not create plugins, skills, agents, or implementation plans in this response.
 Do not ask the user any persona questions.
 
 Return STRICT JSON only using this exact shape:
@@ -67,7 +70,40 @@ if ($null -eq $copilotCommandInfo) {
 Write-Host "Generating communication twin via Copilot CLI + WorkIQ..."
 
 try {
-    & $CopilotCliPath $CopilotCommand --prompt-file $promptPath --output-file $communicationTwinPath
+    $promptText = Get-Content -Path $promptPath -Raw
+
+    $copilotArgs = @(
+        $CopilotCommand,
+        "--prompt", $promptText,
+        "--silent",
+        "--output-format", "text"
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($CopilotModel)) {
+        $copilotArgs += @("--model", $CopilotModel)
+    }
+
+    $copilotOutput = & $CopilotCliPath @copilotArgs
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Copilot CLI exited with code $LASTEXITCODE."
+    }
+
+    $responseText = ($copilotOutput | Out-String).Trim()
+    if ([string]::IsNullOrWhiteSpace($responseText)) {
+        throw "Copilot CLI returned empty output."
+    }
+
+    $jsonMatch = [System.Text.RegularExpressions.Regex]::Match(
+        $responseText,
+        '(?s)```(?:json)?\s*(\{.*?\})\s*```|(?s)(\{.*\})')
+
+    if (-not $jsonMatch.Success) {
+        throw "Copilot CLI output did not contain a JSON object."
+    }
+
+    $jsonPayload = if ($jsonMatch.Groups[1].Success) { $jsonMatch.Groups[1].Value } else { $jsonMatch.Groups[2].Value }
+    Set-Content -Path $communicationTwinPath -Value $jsonPayload -Encoding utf8
 }
 catch {
     throw "Copilot CLI persona generation failed. Ensure Copilot CLI is authenticated and WorkIQ is available, then retry. Inner error: $($_.Exception.Message)"
@@ -78,7 +114,7 @@ if (-not (Test-Path $communicationTwinPath)) {
 }
 
 $rawPersona = Get-Content -Path $communicationTwinPath -Raw
-$persona = $rawPersona | ConvertFrom-Json
+$persona = $rawPersona | ConvertFrom-Json -ErrorAction Stop
 
 if ([string]::IsNullOrWhiteSpace($persona.ownerDisplayName)) {
     throw "Generated persona is missing ownerDisplayName."
