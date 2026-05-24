@@ -44,6 +44,25 @@ This repository includes a dev container with the tooling needed for setup, buil
 
 Open the repo in the dev container and the post-create bootstrap will restore dependencies and install azd if needed.
 
+Before first container start on a new host, export effective git config for in-container global replication:
+
+```bash
+bash .devcontainer/scripts/export-effective-git-config.sh "$(pwd)" .devcontainer/gitconfig.effective
+```
+
+To generate and merge host cache mounts into the final dev container config:
+
+```bash
+bash .devcontainer/scripts/generate-cache-mount-config.sh --allow-missing .devcontainer/cache-mounts.generated.json
+bash .devcontainer/scripts/merge-devcontainer-config.sh
+```
+
+To validate the resulting dev container configuration:
+
+```bash
+bash .devcontainer/scripts/validate-devcontainer-config.sh
+```
+
 Inside the container you can run:
 
 ```powershell
