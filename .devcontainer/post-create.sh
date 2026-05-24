@@ -22,6 +22,9 @@ if ! command -v copilot >/dev/null 2>&1; then
   exit 1
 fi
 
+bash .devcontainer/scripts/bootstrap-ghcp-digital-twin.sh
+bash .devcontainer/scripts/ensure-shell-aliases.sh
+
 echo "Toolchain versions:"
 dotnet --version
 az version | head -n 1 || true

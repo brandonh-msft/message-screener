@@ -16,12 +16,19 @@
     },
     "ghcr.io/devcontainers/features/powershell:1": {}
   },
+  "mounts": [
+    "source=${localWorkspaceFolder}/.devcontainer/gitconfig.effective,target=/workspaces/${localWorkspaceFolderBasename}/.devcontainer/gitconfig.effective,type=bind,consistency=cached"
+  ],
+  "containerEnv": {
+    "POWERSHELL_DISTRIBUTION_CHANNEL": "DevContainers"
+  },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/scripts/apply-global-git-config.sh .devcontainer/gitconfig.effective",
   "customizations": {
     "vscode": {
       "settings": {
         "dotnet.defaultSolution": "MessageScreener.slnx",
-        "terminal.integrated.defaultProfile.linux": "bash"
+        "terminal.integrated.defaultProfile.linux": "pwsh"
       },
       "extensions": [
         "ms-dotnettools.csharp",
