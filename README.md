@@ -80,6 +80,8 @@ This single script resolves azd environment values and generates the Teams manif
 
 - Azure Container Apps environment and API container app
 - User-assigned managed identity for workload auth
+- Azure Bot Service registration bound to the managed identity
+- Microsoft Teams channel on the Bot Service
 - Azure Container Registry for image deployment
 - Log Analytics workspace for container app diagnostics
 
@@ -93,8 +95,7 @@ Set these before running `azd up`:
 
 ```powershell
 azd env set AZURE_LOCATION eastus
-azd env set MESSAGE_SCREENER_TEAMS_APP_ID <teams-app-id>
-azd env set MESSAGE_SCREENER_TEAMS_BOT_ID <bot-client-id>
+azd env set MESSAGE_SCREENER_TEAMS_APP_ID <teams-app-manifest-id>
 ```
 
 When required environment values are present, the hook generates:
@@ -113,6 +114,8 @@ Expected azd environment values:
 - `MESSAGE_SCREENER_PUBLIC_BASE_URL`
 - `MESSAGE_SCREENER_TEAMS_APP_ID`
 - `MESSAGE_SCREENER_TEAMS_BOT_ID`
+
+`MESSAGE_SCREENER_TEAMS_BOT_ID` is produced by infra deployment from the managed identity client ID and does not need to be set manually.
 
 If those values are missing, the hook logs a skip message and deployment continues safely.
 

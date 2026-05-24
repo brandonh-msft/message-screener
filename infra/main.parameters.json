@@ -10,9 +10,6 @@
     },
     "teamsAppId": {
       "value": "${MESSAGE_SCREENER_TEAMS_APP_ID}"
-    },
-    "teamsBotId": {
-      "value": "${MESSAGE_SCREENER_TEAMS_BOT_ID}"
     }
   }
 }

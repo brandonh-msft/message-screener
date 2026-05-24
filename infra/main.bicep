@@ -12,15 +12,14 @@ param tags object = {}
 @description('Teams app ID used for manifest generation output.')
 param teamsAppId string = ''
 
-@description('Teams bot ID (AAD app/client ID) used for manifest generation output.')
-param teamsBotId string = ''
-
 var suffix = toLower(uniqueString(resourceGroup().id, environmentName))
 var acrName = 'acr${take(replace(environmentName, '-', ''), 15)}${take(suffix, 8)}'
 var logAnalyticsName = 'log-${environmentName}-${take(suffix, 6)}'
 var containerAppsEnvironmentName = 'cae-${environmentName}'
 var userAssignedIdentityName = 'id-${environmentName}-app'
 var containerAppName = 'api-${environmentName}'
+var botServiceName = 'bot-${environmentName}-${take(suffix, 6)}'
+var resolvedTeamsAppId = empty(teamsAppId) ? guid(resourceGroup().id, 'message-screener-teams-app') : teamsAppId
 
 resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: userAssignedIdentityName
@@ -122,8 +121,36 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
+resource botService 'Microsoft.BotService/botServices@2022-09-15' = {
+  name: botServiceName
+  location: 'global'
+  tags: tags
+  kind: 'azurebot'
+  sku: {
+    name: 'F0'
+  }
+  properties: {
+    displayName: 'Message Screener Bot (${environmentName})'
+    description: 'Bot registration for Message Screener Teams app.'
+    endpoint: 'https://${containerApp.properties.configuration.ingress.fqdn}/api/messages'
+    msaAppId: userAssignedIdentity.properties.clientId
+    msaAppType: 'UserAssignedMSI'
+    msaAppMSIResourceId: userAssignedIdentity.id
+    isStreamingSupported: false
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource botTeamsChannel 'Microsoft.BotService/botServices/channels@2022-09-15' = {
+  parent: botService
+  name: 'MsTeamsChannel'
+  properties: {
+    channelName: 'MsTeamsChannel'
+  }
+}
+
 resource acrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(containerRegistry.id, userAssignedIdentity.properties.principalId, 'acr-pull')
+  name: guid(containerRegistry.id, userAssignedIdentity.name, 'acr-pull')
   scope: containerRegistry
   properties: {
     principalId: userAssignedIdentity.properties.principalId
@@ -140,8 +167,9 @@ output SERVICE_API_URI string = 'https://${containerApp.properties.configuration
 
 output MESSAGE_SCREENER_PUBLIC_BASE_URL string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
 output MESSAGE_SCREENER_API_ENDPOINT string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
-output MESSAGE_SCREENER_TEAMS_APP_ID string = teamsAppId
-output MESSAGE_SCREENER_TEAMS_BOT_ID string = teamsBotId
+output MESSAGE_SCREENER_TEAMS_APP_ID string = resolvedTeamsAppId
+output MESSAGE_SCREENER_TEAMS_BOT_ID string = userAssignedIdentity.properties.clientId
 
 output MESSAGE_SCREENER_MANAGED_IDENTITY_CLIENT_ID string = userAssignedIdentity.properties.clientId
 output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = logAnalyticsWorkspace.name
+output AZURE_BOT_SERVICE_NAME string = botService.name
