@@ -1,0 +1,17 @@
+name: message-screener
+
+services:
+  api:
+    project: ./src/MessageScreener.Api
+    language: dotnet
+    host: appservice
+
+hooks:
+  postprovision:
+    shell: pwsh
+    run: ./scripts/azd-generate-teams-manifest.ps1 -Hook postprovision
+    continueOnError: false
+  postdeploy:
+    shell: pwsh
+    run: ./scripts/azd-generate-teams-manifest.ps1 -Hook postdeploy
+    continueOnError: false
