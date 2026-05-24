@@ -1,6 +1,9 @@
 {
   "name": "message-screener-dev",
-  "image": "mcr.microsoft.com/devcontainers/dotnet:1-10.0",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
   "features": {
     "ghcr.io/devcontainers/features/common-utils:2": {
       "installZsh": false,
