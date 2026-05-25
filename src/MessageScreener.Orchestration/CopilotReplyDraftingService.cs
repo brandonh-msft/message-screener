@@ -16,11 +16,11 @@ public sealed class MessageScreenerCopilotOptions
 
     public string? Agent { get; init; }
 
-    public string ConfigDirectory { get; init; } = ".";
+    public string ConfigDirectory { get; init; } = "copilot-config";
 
-    public string[] SkillDirectories { get; init; } = [".github/skills", "config/skills"];
+    public string[] SkillDirectories { get; init; } = ["copilot-config/skills"];
 
-    public string SystemPromptPath { get; init; } = "config/copilot-reply.system.prompt.md";
+    public string SystemPromptPath { get; init; } = "copilot-config/prompts/copilot-reply.system.prompt.md";
 
     public string MessageMode { get; init; } = "interactive";
 

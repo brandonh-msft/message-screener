@@ -2,6 +2,8 @@
 
 Apply the digital twin overlay by default for all implementation, refactor, review, and planning tasks in this repository.
 
+These instructions are for repo development only. Product runtime AI assets live under `src/MessageScreener.Api/config/` and `src/MessageScreener.Api/config/copilot-runtime/`.
+
 Primary policy sources:
 - .digital-twin/overlay.md
 - .digital-twin/implementation-checklist.md

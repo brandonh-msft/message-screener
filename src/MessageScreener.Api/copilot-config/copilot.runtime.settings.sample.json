@@ -1,0 +1,17 @@
+{
+  "MessageScreener": {
+    "Copilot": {
+      "GitHubToken": "",
+      "Model": "gpt-4.1",
+      "Agent": "message-screener-researcher",
+      "ConfigDirectory": "copilot-config",
+      "EnableConfigDiscovery": true,
+      "SystemPromptPath": "copilot-config/prompts/copilot-reply.system.prompt.md",
+      "SkillDirectories": [
+        "copilot-config/skills"
+      ],
+      "MessageMode": "interactive",
+      "ResponseTimeoutSeconds": 45
+    }
+  }
+}

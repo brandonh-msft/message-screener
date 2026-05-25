@@ -15,6 +15,7 @@ namespace MessageScreener.Orchestration
     }
 
     public sealed class GhcpAgentHarness(
+        IOptions<MessageScreenerCopilotOptions> copilotOptions,
         IOptions<MessageScreenerAgentOptions> options,
         ILogger<GhcpAgentHarness> logger) : IGhcpAgentHarness
     {
@@ -52,10 +53,13 @@ namespace MessageScreener.Orchestration
         {
             try
             {
+                List<string> skillDirectories = ResolveSkillDirectories(copilotOptions.Value.SkillDirectories);
+
                 await using CopilotClient client = new();
                 await using CopilotSession session = await client.CreateSessionAsync(new SessionConfig
                 {
                     OnPermissionRequest = PermissionHandler.ApproveAll,
+                    SkillDirectories = skillDirectories,
                 }, cancellationToken);
 
                 await session.Rpc.Skills.ReloadAsync(cancellationToken);
@@ -105,6 +109,16 @@ namespace MessageScreener.Orchestration
             }
 
             return Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), configuredPath));
+        }
+
+        private static List<string> ResolveSkillDirectories(IEnumerable<string> configuredDirectories)
+        {
+            return configuredDirectories
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(ResolvePath)
+                .Where(Directory.Exists)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
     }
 }

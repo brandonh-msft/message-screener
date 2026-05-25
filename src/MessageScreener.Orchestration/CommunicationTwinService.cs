@@ -9,9 +9,9 @@ namespace MessageScreener.Orchestration
     {
         public const string SectionName = "MessageScreener";
 
-        public string CommunicationTwinPath { get; init; } = "config/communication-twin.json";
+        public string CommunicationTwinPath { get; init; } = "copilot-config/communication-twin.json";
 
-        public string CommunicationTwinSkillPath { get; init; } = "config/copilot-runtime/skills/communication-twin/SKILL.md";
+        public string CommunicationTwinSkillPath { get; init; } = "copilot-config/skills/communication-twin/SKILL.md";
     }
 
     public interface ICommunicationTwinService

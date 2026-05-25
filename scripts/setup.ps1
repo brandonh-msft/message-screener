@@ -11,8 +11,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $repoRoot
 
-$runtimeConfigDirectory = Join-Path $repoRoot "src/MessageScreener.Api/config"
-$runtimeSkillDirectory = Join-Path $runtimeConfigDirectory "copilot-runtime/skills/communication-twin"
+$runtimeConfigDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config"
+$runtimeSkillDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config/skills/communication-twin"
 $communicationTwinPath = Join-Path $runtimeConfigDirectory "communication-twin.json"
 $communicationTwinSkillPath = Join-Path $runtimeSkillDirectory "SKILL.md"
 $promptPath = Join-Path $repoRoot "scripts/prompts/communication-twin.workiq.prompt.md"
@@ -261,7 +261,7 @@ Set-Content -Path $communicationTwinSkillPath -Value $skillBody -Encoding utf8
 Write-Host "Communication twin JSON created at: $communicationTwinPath"
 Write-Host "Communication twin skill created at: $communicationTwinSkillPath"
 Write-Host "Prompt source: $promptPath"
-Write-Host "Generated runtime twin artifacts are under src/MessageScreener.Api/config."
+Write-Host "Generated runtime twin artifacts are under src/MessageScreener.Api/copilot-config."
 
 if (-not $SkipCopilotRuntimeHook) {
     Write-Host "Configuring runtime Copilot extension hook..."

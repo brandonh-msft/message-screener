@@ -2,11 +2,11 @@ param(
     [switch]$Force,
     [string]$CopilotAgent = "message-screener-researcher",
     [string]$McpConfigPath = ".mcp.json",
-    [string]$RuntimeMcpConfigPath = "src/MessageScreener.Api/config/.mcp.json",
+    [string]$RuntimeMcpConfigPath = "src/MessageScreener.Api/copilot-config/.mcp.json",
     [string]$RuntimeGitHubTokenEnvVar = "MESSAGE_SCREENER_GITHUB_TOKEN",
-    [string[]]$SkillDirectories = @("src/MessageScreener.Api/config/copilot-runtime/skills"),
-    [string]$SystemPromptPath = "src/MessageScreener.Api/config/copilot-reply.system.prompt.md",
-    [string]$OutputSettingsPath = "src/MessageScreener.Api/config/copilot.runtime.settings.sample.json"
+    [string[]]$SkillDirectories = @("src/MessageScreener.Api/copilot-config/skills"),
+    [string]$SystemPromptPath = "src/MessageScreener.Api/copilot-config/prompts/copilot-reply.system.prompt.md",
+    [string]$OutputSettingsPath = "src/MessageScreener.Api/copilot-config/copilot.runtime.settings.sample.json"
 )
 
 Set-StrictMode -Version Latest
@@ -154,4 +154,4 @@ Write-Host "Settings sample written: $resolvedOutputSettingsPath"
 Write-Host "Next steps:"
 Write-Host "1) Set MESSAGE_SCREENER_GITHUB_TOKEN in azd environment."
 Write-Host "2) Optionally copy values from copilot.runtime.settings.sample.json into appsettings or env vars."
-Write-Host "3) Add custom MCP servers in .mcp.json, then re-run setup to refresh src/MessageScreener.Api/config/.mcp.json."
+Write-Host "3) Add custom MCP servers in .mcp.json, then re-run setup to refresh src/MessageScreener.Api/copilot-config/.mcp.json."

@@ -18,11 +18,10 @@ Use these for repo authoring, review, planning, and local development assistance
 
 These files are shipped with the service and used by the deployed product harness:
 
-- `src/MessageScreener.Api/config/`
-- `src/MessageScreener.Api/config/copilot-runtime/`
-- `src/MessageScreener.Api/config/.mcp.json`
+- `src/MessageScreener.Api/copilot-config/`
+- `src/MessageScreener.Api/copilot-config/.mcp.json`
 
-The repo-root `.mcp.json` is the developer seed for product MCP configuration and is copied into `src/MessageScreener.Api/config/.mcp.json` by `scripts/setup-copilot-runtime.ps1`.
+The repo-root `.mcp.json` is the developer seed for product MCP configuration and is copied into `src/MessageScreener.Api/copilot-config/.mcp.json` by `scripts/setup-copilot-runtime.ps1`.
 
 The developer seed and product runtime MCP files intentionally differ by environment token source:
 
@@ -35,6 +34,6 @@ Use these for the deployed GHCP SDK harness, runtime message drafting, readiness
 
 `scripts/setup.ps1` bridges the two surfaces.
 
-It uses developer-side tooling to generate the operating user's communication twin from `scripts/prompts/communication-twin.workiq.prompt.md`, then writes runtime artifacts into `src/MessageScreener.Api/config/` and `src/MessageScreener.Api/config/copilot-runtime/skills/communication-twin/SKILL.md`.
+It uses developer-side tooling to generate the operating user's communication twin from `scripts/prompts/communication-twin.workiq.prompt.md`, then writes runtime artifacts into `src/MessageScreener.Api/copilot-config/` and `src/MessageScreener.Api/copilot-config/skills/communication-twin/SKILL.md`.
 
 The setup prompt used to generate the twin is a bootstrap artifact, not a deployed product asset.
