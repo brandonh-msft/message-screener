@@ -448,10 +448,30 @@ static TeamsInboundMessage? TryParseForwardedMessageFromInvoke(JsonElement root)
         return null;
     }
 
-    string senderAadObjectId = FirstNonEmpty(
-        GetJsonPathString(messagePayload.Value, "from", "user", "id"),
-        GetNestedJsonString(messagePayload.Value, "from", "id"),
-        string.Empty) ?? string.Empty;
+    string? senderAadObjectId = GetJsonPathString(messagePayload.Value, "from", "user", "id");
+    string? teamsSenderId = GetNestedJsonString(messagePayload.Value, "from", "id");
+    string senderDisplayName = FirstNonEmpty(
+        GetJsonPathString(messagePayload.Value, "from", "user", "displayName"),
+        GetNestedJsonString(messagePayload.Value, "from", "name"),
+        "Unknown sender") ?? "Unknown sender";
+
+    SenderIdentityKeyKind senderIdentityKeyKind;
+    string? senderIdentityKey;
+    if (!string.IsNullOrWhiteSpace(senderAadObjectId))
+    {
+        senderIdentityKeyKind = SenderIdentityKeyKind.AadObjectId;
+        senderIdentityKey = senderAadObjectId;
+    }
+    else if (!string.IsNullOrWhiteSpace(teamsSenderId))
+    {
+        senderIdentityKeyKind = SenderIdentityKeyKind.TeamsSenderId;
+        senderIdentityKey = teamsSenderId;
+    }
+    else
+    {
+        senderIdentityKeyKind = SenderIdentityKeyKind.Unresolved;
+        senderIdentityKey = null;
+    }
 
     string bodyText = StripHtml(GetNestedJsonString(messagePayload.Value, "body", "content"));
     string tenantId = FirstNonEmpty(
@@ -470,7 +490,10 @@ static TeamsInboundMessage? TryParseForwardedMessageFromInvoke(JsonElement root)
         EventId: $"teams-action:{conversationId}:{messageId}",
         TenantId: tenantId,
         ConversationId: conversationId,
-        SenderAadObjectId: senderAadObjectId,
+        SourceMessageId: messageId,
+        SenderDisplayName: senderDisplayName,
+        SenderIdentityKey: senderIdentityKey,
+        SenderIdentityKeyKind: senderIdentityKeyKind,
         BodyPlainText: bodyText,
         Scope: scope,
         IsAtMention: true,

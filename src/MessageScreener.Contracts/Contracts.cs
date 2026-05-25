@@ -6,11 +6,21 @@ namespace MessageScreener.Contracts
         GroupChat = 1,
     }
 
+    public enum SenderIdentityKeyKind
+    {
+        AadObjectId = 0,
+        TeamsSenderId = 1,
+        Unresolved = 2,
+    }
+
     public sealed record TeamsInboundMessage(
         string EventId,
         string TenantId,
         string ConversationId,
-        string SenderAadObjectId,
+        string SourceMessageId,
+        string SenderDisplayName,
+        string? SenderIdentityKey,
+        SenderIdentityKeyKind SenderIdentityKeyKind,
         string BodyPlainText,
         ConversationScope Scope,
         bool IsAtMention,
