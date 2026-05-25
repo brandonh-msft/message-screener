@@ -36,6 +36,6 @@ Use these for the deployed GHCP SDK harness, runtime message drafting, readiness
 
 `scripts/setup.ps1` bridges the two surfaces.
 
-It uses developer-side tooling to generate the operating user's communication twin, then writes the runtime artifacts into `src/MessageScreener.Api/config/`.
+It uses developer-side tooling to generate the operating user's communication twin from `scripts/prompts/communication-twin.workiq.prompt.md`, then writes runtime artifacts into `src/MessageScreener.Api/config/` and `src/MessageScreener.Api/config/copilot-runtime/skills/communication-twin/SKILL.md`.
 
 The setup prompt used to generate the twin is a bootstrap artifact, not a deployed product asset.

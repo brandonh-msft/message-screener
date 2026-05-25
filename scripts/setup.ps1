@@ -12,10 +12,10 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $repoRoot
 
 $runtimeConfigDirectory = Join-Path $repoRoot "src/MessageScreener.Api/config"
+$runtimeSkillDirectory = Join-Path $runtimeConfigDirectory "copilot-runtime/skills/communication-twin"
 $communicationTwinPath = Join-Path $runtimeConfigDirectory "communication-twin.json"
-$communicationTwinSkillPath = Join-Path $runtimeConfigDirectory "communication-twin.skill.md"
-$promptsDirectory = Join-Path $repoRoot ".github/prompts"
-$promptPath = Join-Path $promptsDirectory "communication-twin.workiq.prompt.md"
+$communicationTwinSkillPath = Join-Path $runtimeSkillDirectory "SKILL.md"
+$promptPath = Join-Path $repoRoot "scripts/prompts/communication-twin.workiq.prompt.md"
 
 function Resolve-CopilotCliCommand {
     param(
@@ -120,8 +120,12 @@ if (-not (Test-Path $runtimeConfigDirectory)) {
     New-Item -Path $runtimeConfigDirectory -ItemType Directory | Out-Null
 }
 
-if (-not (Test-Path $promptsDirectory)) {
-    New-Item -Path $promptsDirectory -ItemType Directory | Out-Null
+if (-not (Test-Path $runtimeSkillDirectory)) {
+    New-Item -Path $runtimeSkillDirectory -ItemType Directory -Force | Out-Null
+}
+
+if (-not (Test-Path $promptPath)) {
+    throw "Twin generation prompt was not found at $promptPath"
 }
 
 if ((Test-Path $communicationTwinPath) -and -not $Force) {
@@ -129,32 +133,6 @@ if ((Test-Path $communicationTwinPath) -and -not $Force) {
     Write-Host "Use -Force to overwrite it."
     exit 0
 }
-
-$prompt = @"
-You are generating a communication twin profile for Message Screener.
-
-Focus only on communication style. Use WorkIQ to analyze the user's recent Teams messages and emails.
-Also consider communication-related writing patterns visible in public code and docs from brandonh-msft and bc3tech repositories.
-Do not create plugins, skills, agents, or implementation plans in this response.
-Do not ask the user any persona questions.
-
-Return STRICT JSON only using this exact shape:
-{
-  "ownerDisplayName": "string",
-  "personaSummary": "string",
-  "preferredPhrases": ["string", "string", "string"],
-  "avoidPhrases": ["string", "string", "string"],
-  "tone": "professional|friendly|direct|formal"
-}
-
-Constraints:
-- Keep `personaSummary` to one sentence.
-- Prefer concise, actionable phrasing from observed communication style.
-- Avoid speculative details that are not supported by WorkIQ evidence.
-- Ensure JSON is valid and contains all required fields.
-"@
-
-Set-Content -Path $promptPath -Value $prompt -Encoding utf8
 
 $resolvedCopilotCli = Resolve-CopilotCliCommand -RequestedPath $CopilotCliPath
 if ([string]::IsNullOrWhiteSpace($resolvedCopilotCli)) {
@@ -218,8 +196,31 @@ if ([string]::IsNullOrWhiteSpace($persona.personaSummary)) {
     throw "Generated persona is missing personaSummary."
 }
 
+function Format-BulletSection {
+    param(
+        [object]$Items,
+        [string]$Fallback
+    )
+
+    $values = @($Items | ForEach-Object { "$_".Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($values.Count -eq 0) {
+        return "- $Fallback"
+    }
+
+    return [string]::Join("`n", ($values | ForEach-Object { "- $_" }))
+}
+
+$personaNarrative = if ([string]::IsNullOrWhiteSpace($persona.personaNarrative)) {
+    $persona.personaSummary
+}
+else {
+    $persona.personaNarrative
+}
+
 $skillBody = @"
 # communication-twin
+
+Use this skill to emulate the operating user's authentic communication style with high fidelity.
 
 owner: $($persona.ownerDisplayName)
 tone: $($persona.tone)
@@ -227,23 +228,40 @@ tone: $($persona.tone)
 persona summary:
 $($persona.personaSummary)
 
+persona narrative:
+$personaNarrative
+
 preferred phrases:
-$([string]::Join("`n", ($persona.preferredPhrases | ForEach-Object { "- $_" })))
+$(Format-BulletSection -Items $persona.preferredPhrases -Fallback "Use direct, practical phrasing that lowers friction for next steps.")
 
 avoid phrases:
-$([string]::Join("`n", ($persona.avoidPhrases | ForEach-Object { "- $_" })))
+$(Format-BulletSection -Items $persona.avoidPhrases -Fallback "Avoid vague or non-committal phrasing.")
+
+communication principles:
+$(Format-BulletSection -Items $persona.communicationPrinciples -Fallback "Prioritize clarity, accountability, and concrete next actions.")
+
+response style guidelines:
+$(Format-BulletSection -Items $persona.responseStyleGuidelines -Fallback "Front-load decisions, owners, and dates when relevant.")
+
+relationship signals:
+$(Format-BulletSection -Items $persona.relationshipSignals -Fallback "Acknowledge context quickly, then move to action.")
+
+escalation boundaries:
+$(Format-BulletSection -Items $persona.escalationBoundaries -Fallback "Do not imply commitments or approvals that were not explicitly granted.")
 
 response rules:
-- mirror the owner's concise style while remaining professional.
-- provide short actionable responses first, then optional detail.
-- do not claim actions were taken unless explicitly approved by the owner.
+- mirror the owner's voice with specificity rather than generic corporate phrasing.
+- keep replies practical and decision-oriented, with clear owners and next steps when appropriate.
+- do not invent facts, commitments, or approvals.
+- use available MCP context when it materially improves response quality.
 "@
 
 Set-Content -Path $communicationTwinSkillPath -Value $skillBody -Encoding utf8
 
 Write-Host "Communication twin JSON created at: $communicationTwinPath"
 Write-Host "Communication twin skill created at: $communicationTwinSkillPath"
-Write-Host "These files are deployment-shipped runtime artifacts in a well-known path under src/MessageScreener.Api/config."
+Write-Host "Prompt source: $promptPath"
+Write-Host "Generated runtime twin artifacts are under src/MessageScreener.Api/config."
 
 if (-not $SkipCopilotRuntimeHook) {
     Write-Host "Configuring runtime Copilot extension hook..."

@@ -17,7 +17,7 @@ namespace MessageScreener.Orchestration
 
         public string CommunicationTwinPath { get; init; } = "config/communication-twin.json";
 
-        public string CommunicationTwinSkillPath { get; init; } = "config/communication-twin.skill.md";
+        public string CommunicationTwinSkillPath { get; init; } = "config/copilot-runtime/skills/communication-twin/SKILL.md";
     }
 
     public interface ICommunicationTwinService
