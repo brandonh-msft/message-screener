@@ -1,6 +1,5 @@
 param(
     [string]$CopilotCliPath = "copilot",
-    [string]$CopilotCommand = "chat",
     [string]$CopilotModel,
     [switch]$Force
 )
@@ -17,6 +16,105 @@ $skillsDirectory = Join-Path $communicationTwinDirectory "skills"
 $communicationTwinSkillPath = Join-Path $skillsDirectory "communication-twin.skill.md"
 $promptsDirectory = Join-Path $communicationTwinDirectory "prompts"
 $promptPath = Join-Path $promptsDirectory "communication-twin.workiq.prompt.md"
+
+function Resolve-CopilotCliCommand {
+    param(
+        [string]$RequestedPath
+    )
+
+    function Is-VsCodeCopilotShimPath {
+        param(
+            [string]$Path
+        )
+
+        if ([string]::IsNullOrWhiteSpace($Path)) {
+            return $false
+        }
+
+        return ($Path -match "[\\/]\.vscode-server(?:-insiders)?[\\/].*github\.copilot-chat[\\/]copilotCli[\\/]copilot")
+    }
+
+    function Test-CopilotCandidate {
+        param(
+            [string]$CandidatePath
+        )
+
+        if ([string]::IsNullOrWhiteSpace($CandidatePath)) {
+            return $false
+        }
+
+        if (Is-VsCodeCopilotShimPath -Path $CandidatePath) {
+            return $false
+        }
+
+        try {
+            $versionOutput = & $CandidatePath --version 2>&1 | Out-String
+            $versionText = $versionOutput.Trim()
+
+            if ($LASTEXITCODE -ne 0) {
+                return $false
+            }
+
+            # VS Code Copilot shim may exist on PATH but fail with this text.
+            if ($versionText -match "Cannot find GitHub Copilot CLI") {
+                return $false
+            }
+
+            return $true
+        }
+        catch {
+            return $false
+        }
+    }
+
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($RequestedPath)) {
+        $candidates += $RequestedPath
+    }
+    $candidates += @("/usr/local/bin/copilot", "copilot")
+
+    foreach ($candidate in ($candidates | Select-Object -Unique)) {
+        $candidateInfo = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($null -ne $candidateInfo -and (Test-CopilotCandidate -CandidatePath $candidateInfo.Source)) {
+            return $candidateInfo.Source
+        }
+    }
+
+    $npmInfo = Get-Command "npm" -ErrorAction SilentlyContinue
+    if ($null -ne $npmInfo) {
+        try {
+            $npmPrefix = (& npm config get prefix 2>$null | Out-String).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($npmPrefix)) {
+                $npmBins = @(
+                    (Join-Path $npmPrefix "bin"),
+                    $npmPrefix
+                )
+
+                foreach ($binDir in ($npmBins | Select-Object -Unique)) {
+                    if (-not (Test-Path $binDir)) {
+                        continue
+                    }
+
+                    if (($env:PATH -split [IO.Path]::PathSeparator) -notcontains $binDir) {
+                        $env:PATH = "$binDir$([IO.Path]::PathSeparator)$env:PATH"
+                    }
+
+                    foreach ($exeName in @("copilot", "copilot.cmd")) {
+                        $fullPath = Join-Path $binDir $exeName
+                        if ((Test-Path $fullPath) -and (Test-CopilotCandidate -CandidatePath $fullPath)) {
+                            return $fullPath
+                        }
+                    }
+                }
+            }
+        }
+        catch {
+            # Fall through to final error with explicit remediation.
+        }
+    }
+
+    return $null
+}
 
 if (-not (Test-Path $communicationTwinDirectory)) {
     New-Item -Path $communicationTwinDirectory -ItemType Directory | Out-Null
@@ -62,18 +160,18 @@ Constraints:
 
 Set-Content -Path $promptPath -Value $prompt -Encoding utf8
 
-$copilotCommandInfo = Get-Command $CopilotCliPath -ErrorAction SilentlyContinue
-if ($null -eq $copilotCommandInfo) {
-    throw "Copilot CLI command '$CopilotCliPath' was not found. Install/configure GitHub Copilot CLI, then re-run setup."
+$resolvedCopilotCli = Resolve-CopilotCliCommand -RequestedPath $CopilotCliPath
+if ([string]::IsNullOrWhiteSpace($resolvedCopilotCli)) {
+    throw "No usable Copilot CLI command was found (checked '$CopilotCliPath' and 'copilot'). Re-run '.devcontainer/scripts/bootstrap-copilot-digital-twin.sh' and authenticate with 'gh auth login', then re-run setup."
 }
 
+Write-Host "Using Copilot CLI command: $resolvedCopilotCli"
 Write-Host "Generating communication twin via Copilot CLI + WorkIQ..."
 
 try {
     $promptText = Get-Content -Path $promptPath -Raw
 
     $copilotArgs = @(
-        $CopilotCommand,
         "--prompt", $promptText,
         "--silent",
         "--output-format", "text"
@@ -83,7 +181,7 @@ try {
         $copilotArgs += @("--model", $CopilotModel)
     }
 
-    $copilotOutput = & $CopilotCliPath @copilotArgs
+    $copilotOutput = & $resolvedCopilotCli @copilotArgs
 
     if ($LASTEXITCODE -ne 0) {
         throw "Copilot CLI exited with code $LASTEXITCODE."

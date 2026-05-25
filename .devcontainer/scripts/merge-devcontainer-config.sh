@@ -15,11 +15,14 @@ if [[ ! -f "$cache_path" ]]; then
   exit 1
 fi
 
-pwsh -NoProfile -Command @'
+tmp_ps1="$(mktemp)"
+trap 'rm -f "$tmp_ps1"' EXIT
+
+cat > "$tmp_ps1" <<'PS1'
 param(
-  [string]$TemplatePath,
-  [string]$CachePath,
-  [string]$OutputPath
+  [Parameter(Mandatory = $true)][string]$TemplatePath,
+  [Parameter(Mandatory = $true)][string]$CachePath,
+  [Parameter(Mandatory = $true)][string]$OutputPath
 )
 
 $template = Get-Content -Path $TemplatePath -Raw | ConvertFrom-Json -AsHashtable
@@ -32,7 +35,11 @@ if (-not $cache.ContainsKey('mounts') -or $null -eq $cache.mounts) {
   $cache.mounts = @()
 }
 
-$template.mounts = @($template.mounts + $cache.mounts | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+$template.mounts = @(
+  $template.mounts + $cache.mounts |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+    Select-Object -Unique
+)
 
 if (-not $template.ContainsKey('containerEnv') -or $null -eq $template.containerEnv) {
   $template.containerEnv = @{}
@@ -45,4 +52,6 @@ if ($cache.ContainsKey('containerEnv') -and $null -ne $cache.containerEnv) {
 
 $template | ConvertTo-Json -Depth 100 | Set-Content -Path $OutputPath -Encoding utf8
 Write-Host "Merged devcontainer config written to $OutputPath"
-'@ -TemplatePath "$template_path" -CachePath "$cache_path" -OutputPath "$output_path"
+PS1
+
+pwsh -NoProfile -File "$tmp_ps1" -TemplatePath "$template_path" -CachePath "$cache_path" -OutputPath "$output_path"

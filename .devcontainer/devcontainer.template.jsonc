@@ -10,6 +10,7 @@
       "username": "vscode"
     },
     "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/copilot-cli:1": {},
     "ghcr.io/devcontainers/features/azure-cli:1": {},
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
@@ -22,7 +23,7 @@
   "containerEnv": {
     "POWERSHELL_DISTRIBUTION_CHANNEL": "DevContainers"
   },
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postCreateCommand": "bash .devcontainer/scripts/bootstrap-copilot-digital-twin.sh",
   "postStartCommand": "bash .devcontainer/scripts/apply-global-git-config.sh .devcontainer/gitconfig.effective",
   "customizations": {
     "vscode": {

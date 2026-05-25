@@ -5,6 +5,11 @@ REPO_PATH="${1:-$(pwd)}"
 OUTPUT_PATH="${2:-.devcontainer/gitconfig.effective}"
 
 mkdir -p "$(dirname "$OUTPUT_PATH")"
+if [[ -d "$OUTPUT_PATH" ]]; then
+  echo "ERROR: $OUTPUT_PATH is a directory; expected a file path." >&2
+  echo "Remove the directory and rerun export." >&2
+  exit 1
+fi
 : > "$OUTPUT_PATH"
 
 while IFS= read -r key; do
