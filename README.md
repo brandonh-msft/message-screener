@@ -174,3 +174,4 @@ If those values are missing, the hook logs a skip message and deployment continu
 
 - Knowledge base root: `docs/solutions/`
 - This session's learning: `docs/solutions/integration-issues/copilot-cli-shim-shadowing-devcontainer-2026-05-24.md`
+- Non-admin Graph permissions and auto-screening boundary: `docs/solutions/integration-issues/automatic-dm-screening-requires-tenant-admin-graph-consent-2026-05-24.md`
