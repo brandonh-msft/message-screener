@@ -3,6 +3,18 @@
 name: message-screener
 metadata:
     template: azd-init@1.25.2
+hooks:
+    postprovision:
+        shell: pwsh
+        run: >-
+            if (Test-Path ../../scripts/azd-configure-m365-app.ps1) {
+              ../../scripts/azd-configure-m365-app.ps1
+            } elseif (Test-Path ./scripts/azd-configure-m365-app.ps1) {
+              ./scripts/azd-configure-m365-app.ps1
+            } else {
+              Write-Warning 'Could not locate scripts/azd-configure-m365-app.ps1 from current working directory. Skipping M365 app registration.'
+            }
+        continueOnError: true
 services:
     messagescreener-api:
         project: src/MessageScreener.Api

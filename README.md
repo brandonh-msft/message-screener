@@ -180,6 +180,62 @@ Set these before running `azd up`:
 
 ```powershell
 azd env set AZURE_LOCATION eastus
+azd env set MESSAGE_SCREENER_GITHUB_TOKEN <github-token>
+azd env set MESSAGE_SCREENER_PUBLIC_BASE_URL https://<deployed-api-url>
+```
+
+Optional configuration:
+
+```powershell
+azd env set MESSAGE_SCREENER_COPILOT_MODEL gpt-4.1
+azd env set MESSAGE_SCREENER_COPILOT_AGENT message-screener-researcher
+azd env set MESSAGE_SCREENER_PERSONAL_REVIEW_CONVERSATION_ID <teams-chat-id>
+azd env set MESSAGE_SCREENER_AUDIT_OWNER_READ_API_KEY <key-for-audit-reads>
+```
+
+### M365 Authentication for WorkIQ
+
+**Automated Setup (postprovision hook):**
+
+The `scripts/azd-configure-m365-app.ps1` script runs automatically after `azd provision` and:
+1. Registers an M365 OAuth2 app in Entra ID (WorkIQ integration)
+2. Generates a client secret with 1-year expiry
+3. Stores credentials securely in Azure Key Vault
+4. Updates azd environment: `MESSAGE_SCREENER_M365_CLIENT_ID`, `MESSAGE_SCREENER_M365_CLIENT_SECRET`, `MESSAGE_SCREENER_M365_TENANT_ID`
+
+**Manual re-run or debugging:**
+
+```powershell
+# Re-run M365 app registration with same app (reuses if exists)
+pwsh ./scripts/azd-configure-m365-app.ps1
+
+# Force re-registration (creates new secret)
+pwsh ./scripts/azd-configure-m365-app.ps1 -Force
+
+# Manual verification in Entra ID
+https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade
+```
+
+**Owner Authentication Workflow:**
+
+Once deployed, owner initiates M365 auth at:
+```
+POST /api/auth-m365/initiate
+→ Returns device code + user code
+→ Owner authenticates at verification URI
+→ Poll /api/auth-m365/poll until authorized
+→ Refresh token securely stored in Key Vault
+→ WorkIQ can now query owner's M365 data
+```
+
+**Status & Management:**
+
+```powershell
+# Check M365 auth readiness
+curl https://<api-url>/api/auth-m365/status
+
+# Revoke M365 auth (removes Key Vault token)
+curl -X POST https://<api-url>/api/auth-m365/revoke
 ```
 
 `MESSAGE_SCREENER_TEAMS_APP_ID` is optional. If omitted, infra generates a deterministic Teams app ID for the manifest package.
