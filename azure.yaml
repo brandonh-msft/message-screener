@@ -24,3 +24,9 @@ resources:
     messagescreener-api:
         type: host.containerapp
         port: 8080
+
+hooks:
+  postprovision:
+    shell: pwsh
+    run: ./scripts/azd-configure-graph-permissions.ps1
+    continueOnError: true
