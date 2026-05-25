@@ -6,6 +6,7 @@ module: graph-webhook-ingress
 component: microsoft-graph-permissions
 status: resolved
 date: 2026-05-24
+last_updated: 2026-05-25
 tags:
   - microsoft-graph
   - teams
@@ -55,6 +56,8 @@ Automatic background DM screening relies on Graph app permissions that require t
 - non-admin deployment succeeds and exposes features that do not require tenant-wide app-role grants
 - admin-capable tenants still get automated app-role assignment through the same hook
 
+This remains useful context for permission boundaries, but the primary v1 intake path has since shifted to Teams message-action forwarding. See the related follow-up for the Graph/Kiota removal and delivery-status truthfulness implementation.
+
 ## Prevention
 1. Treat tenant-level identity operations as capability-conditional:
 - Design hooks to degrade gracefully when admin privileges are absent.
@@ -75,3 +78,5 @@ Automatic background DM screening relies on Graph app permissions that require t
   - `scripts/azd-configure-graph-permissions.ps1`
   - `azure.yaml`
   - `README.md`
+- Follow-up solution:
+  - `docs/solutions/integration-issues/teams-message-action-graph-removal-truthful-status-2026-05-25.md`
