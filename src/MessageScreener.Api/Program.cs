@@ -168,7 +168,8 @@ app.MapPost("/api/messages", async (
         ForwardedMessageIntakeRequest? forwardedRequest = TryParseForwardedMessageFromInvoke(root);
         if (forwardedRequest is null)
         {
-            return Results.BadRequest();
+            return Results.Ok(CreateComposeExtensionStatus(
+                "Forwarding could not capture the full message context. Open your personal Message Screener chat and paste the message manually."));
         }
 
         TeamsInboundMessage forwardedMessage = CreateInboundMessage(forwardedRequest);
@@ -188,14 +189,7 @@ app.MapPost("/api/messages", async (
             _ => "Message forwarded to Message Screener.",
         };
 
-        return Results.Ok(new
-        {
-            composeExtension = new
-            {
-                type = "message",
-                text = statusText,
-            }
-        });
+        return Results.Ok(CreateComposeExtensionStatus(statusText));
     }
 
     if (!string.Equals(activityType, "message", StringComparison.OrdinalIgnoreCase) ||
@@ -529,6 +523,18 @@ static ForwardedMessageIntakeRequest? TryParseForwardedMessageFromInvoke(JsonEle
         IsAtMention: request.IsAtMention,
         OccurredAtUtc: request.OccurredAtUtc);
     }
+
+static object CreateComposeExtensionStatus(string text)
+{
+    return new
+    {
+        composeExtension = new
+        {
+            type = "message",
+            text,
+        }
+    };
+}
 
 static string StripHtml(string? content)
 {
