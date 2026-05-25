@@ -109,6 +109,10 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
             value: messagescreenerApiIdentity.outputs.clientId
           }
           {
+            name: 'MessageScreener__GraphWebhook__ClientState'
+            value: guid(resourceGroup().id, 'graph-webhook-client-state')
+          }
+          {
             name: 'PORT'
             value: '8080'
           }
