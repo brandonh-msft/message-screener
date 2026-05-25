@@ -24,22 +24,13 @@ namespace MessageScreener.ReviewDelivery
             CancellationToken cancellationToken);
     }
 
-    public sealed class ReviewDeliveryService(ILogger<ReviewDeliveryService> logger) : IReviewDeliveryService
+    public sealed class ReviewDeliveryService(
+        ITeamsMessageClient teamsMessageClient,
+        IPersonalReviewConversationRegistry conversationRegistry,
+        IOptions<MessageScreenerTeamsOptions> options,
+        ILogger<ReviewDeliveryService> logger) : IReviewDeliveryService
     {
-        private readonly ITeamsMessageClient _teamsMessageClient = null!;
-        private readonly MessageScreenerTeamsOptions _options = null!;
-        private readonly IPersonalReviewConversationRegistry _conversationRegistry = null!;
-
-        public ReviewDeliveryService(
-            ITeamsMessageClient teamsMessageClient,
-            IPersonalReviewConversationRegistry conversationRegistry,
-            IOptions<MessageScreenerTeamsOptions> options,
-            ILogger<ReviewDeliveryService> logger) : this(logger)
-        {
-            _teamsMessageClient = teamsMessageClient;
-            _conversationRegistry = conversationRegistry;
-            _options = options.Value;
-        }
+        private readonly MessageScreenerTeamsOptions _options = options.Value;
 
         public ValueTask<ReviewDeliveryResult> SendPendingApprovalReplyAsync(
             TeamsInboundMessage message,
@@ -57,7 +48,7 @@ namespace MessageScreener.ReviewDelivery
             string? targetConversationId = _options.PersonalReviewConversationId;
             string? targetServiceUrl = _options.BotServiceUrl;
 
-            PersonalReviewConversationContext? remembered = _conversationRegistry.GetCurrent();
+            PersonalReviewConversationContext? remembered = conversationRegistry.GetCurrent();
             if (string.IsNullOrWhiteSpace(targetConversationId))
             {
                 targetConversationId = remembered?.ConversationId;
@@ -88,7 +79,7 @@ namespace MessageScreener.ReviewDelivery
 
             try
             {
-                await _teamsMessageClient.SendMessageAsync(
+                await teamsMessageClient.SendMessageAsync(
                     targetServiceUrl,
                     targetConversationId,
                     pendingApprovalText,
