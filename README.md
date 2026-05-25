@@ -150,6 +150,12 @@ Runtime review delivery also requires a personal screener destination conversati
 
 - `MessageScreener__Teams__PersonalReviewConversationId`
 
+Optional owner-scoped audit reads can be enabled with:
+
+- `MessageScreener__Audit__OwnerReadApiKey`
+
+When configured, recent forward audit entries are available from `GET /api/audit/forwards` with header `X-MessageScreener-Owner-Key: <configured key>`.
+
 `MESSAGE_SCREENER_TEAMS_BOT_ID` is produced by infra deployment from the managed identity client ID and does not need to be set manually.
 
 If those values are missing, the hook logs a skip message and deployment continues safely.

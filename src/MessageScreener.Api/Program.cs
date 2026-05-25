@@ -30,6 +30,9 @@ builder.Services
 builder.Services
     .AddOptions<MessageScreenerTeamsOptions>()
     .BindConfiguration(MessageScreenerTeamsOptions.SectionName);
+builder.Services
+    .AddOptions<MessageScreenerAuditOptions>()
+    .BindConfiguration(MessageScreenerAuditOptions.SectionName);
 builder.Services.AddSingleton<IInboundEventStore, InMemoryInboundEventStore>();
 builder.Services.AddSingleton<IForwardAuditStore, InMemoryForwardAuditStore>();
 builder.Services.AddSingleton<ITriggerPolicy, TeamsTriggerPolicy>();
@@ -95,6 +98,35 @@ app.MapGet("/health", () => Results.Ok(new
     status = "ok",
     utcTimestamp = DateTimeOffset.UtcNow,
 }));
+
+app.MapGet("/api/audit/forwards", async (
+    HttpRequest request,
+    IForwardAuditStore forwardAuditStore,
+    IOptions<MessageScreenerAuditOptions> auditOptions,
+    CancellationToken cancellationToken) =>
+{
+    string? configuredKey = auditOptions.Value.OwnerReadApiKey;
+    if (string.IsNullOrWhiteSpace(configuredKey))
+    {
+        return Results.NotFound();
+    }
+
+    if (!request.Headers.TryGetValue("X-MessageScreener-Owner-Key", out var providedKey) ||
+        !string.Equals(providedKey.ToString(), configuredKey, StringComparison.Ordinal))
+    {
+        return Results.Forbid();
+    }
+
+    int limit = 50;
+    if (request.Query.TryGetValue("limit", out var limitValue) &&
+        int.TryParse(limitValue.ToString(), out int parsedLimit))
+    {
+        limit = Math.Clamp(parsedLimit, 1, 200);
+    }
+
+    IReadOnlyList<ForwardAuditEntry> entries = await forwardAuditStore.GetRecentAsync(limit, cancellationToken);
+    return Results.Ok(entries);
+});
 
 app.MapPost("/api/intake/forward", async (
     HttpRequest request,

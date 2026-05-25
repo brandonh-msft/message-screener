@@ -19,6 +19,8 @@ public sealed record ForwardAuditEntry(
 public interface IForwardAuditStore
 {
     ValueTask AppendAsync(ForwardAuditEntry entry, CancellationToken cancellationToken);
+
+    ValueTask<IReadOnlyList<ForwardAuditEntry>> GetRecentAsync(int limit, CancellationToken cancellationToken);
 }
 
 public sealed class InMemoryForwardAuditStore : IForwardAuditStore
@@ -30,5 +32,23 @@ public sealed class InMemoryForwardAuditStore : IForwardAuditStore
         cancellationToken.ThrowIfCancellationRequested();
         _entries.Enqueue(entry);
         return ValueTask.CompletedTask;
+    }
+
+    public ValueTask<IReadOnlyList<ForwardAuditEntry>> GetRecentAsync(int limit, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (limit <= 0)
+        {
+            return ValueTask.FromResult<IReadOnlyList<ForwardAuditEntry>>([]);
+        }
+
+        ForwardAuditEntry[] snapshot = _entries.ToArray();
+        IReadOnlyList<ForwardAuditEntry> recent = snapshot
+            .Reverse()
+            .Take(limit)
+            .ToArray();
+
+        return ValueTask.FromResult(recent);
     }
 }
