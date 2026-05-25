@@ -50,6 +50,8 @@ If `copilot --version` prints `Cannot find GitHub Copilot CLI`, your shell is re
 bash .devcontainer/scripts/bootstrap-copilot-digital-twin.sh
 ```
 
+`azd` is installed via the devcontainer feature (`ghcr.io/azure/azure-dev/azd:latest`). If `azd` is missing, rebuild the container so feature provisioning re-runs.
+
 Before first container start on a new host, export effective git config for in-container global replication:
 
 ```bash

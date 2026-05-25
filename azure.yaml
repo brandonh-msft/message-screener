@@ -1,13 +1,20 @@
-name: message-screener
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
 
+name: message-screener
+metadata:
+    template: azd-init@1.25.2
 services:
-  api:
-    project: ./src/MessageScreener.Api
-    language: dotnet
-    host: containerapp
+    messagescreener-api:
+        project: src/MessageScreener.Api
+        host: containerapp
+        language: dotnet
+resources:
+    messagescreener-api:
+        type: host.containerapp
+        port: 8080
 
 hooks:
-  postdeploy:
-    shell: pwsh
-    run: ./scripts/azd-generate-teams-manifest.ps1
-    continueOnError: false
+    postdeploy:
+        shell: pwsh
+        run: ./scripts/azd-generate-teams-manifest.ps1
+        continueOnError: false

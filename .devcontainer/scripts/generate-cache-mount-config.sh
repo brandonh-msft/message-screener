@@ -31,9 +31,44 @@ required_vars=(
   XDG_DATA_HOME
 )
 
+resolve_env_var() {
+  local var_name="$1"
+
+  # First prefer the current process environment if available.
+  if [[ -n "${!var_name:-}" ]]; then
+    printf '%s' "${!var_name}"
+    return
+  fi
+
+  # On Windows hosts, bash-launched scripts can miss variables that are visible
+  # in PowerShell user/machine scopes. Fall back to pwsh when available.
+  if command -v pwsh >/dev/null 2>&1; then
+    local resolved
+    resolved=$(pwsh -NoProfile -Command "\
+\$name = '$var_name'; \
+\$value = [Environment]::GetEnvironmentVariable(\$name, 'Process'); \
+if ([string]::IsNullOrWhiteSpace(\$value)) { \
+  \$value = [Environment]::GetEnvironmentVariable(\$name, 'User'); \
+} \
+if ([string]::IsNullOrWhiteSpace(\$value)) { \
+  \$value = [Environment]::GetEnvironmentVariable(\$name, 'Machine'); \
+} \
+if (-not [string]::IsNullOrWhiteSpace(\$value)) { \
+  Write-Output \$value; \
+}" 2>/dev/null | tr -d '\r')
+
+    if [[ -n "${resolved:-}" ]]; then
+      printf '%s' "$resolved"
+      return
+    fi
+  fi
+
+  printf ''
+}
+
 missing=()
 for var_name in "${required_vars[@]}"; do
-  if [[ -z "${!var_name:-}" ]]; then
+  if [[ -z "$(resolve_env_var "$var_name")" ]]; then
     missing+=("$var_name")
   fi
 done
@@ -53,8 +88,10 @@ add_mount_and_env() {
   local host_var="$1"
   local env_name="$2"
   local target_path="$3"
+  local resolved_value
 
-  if [[ -z "${!host_var:-}" ]]; then
+  resolved_value="$(resolve_env_var "$host_var")"
+  if [[ -z "${resolved_value:-}" ]]; then
     return
   fi
 
@@ -70,8 +107,11 @@ add_mount_and_env PIP_CACHE_DIR PIP_CACHE_DIR /opt/host-caches/pip
 add_mount_and_env VCPKG_DEFAULT_BINARY_CACHE VCPKG_DEFAULT_BINARY_CACHE /opt/host-caches/vcpkg
 add_mount_and_env XDG_DATA_HOME XDG_DATA_HOME /opt/host-caches/xdg-data
 
-if [[ -n "${COPILOT_CACHE_HOME:-}" ]]; then
-  if [[ -n "${COPILOT_HOME:-}" && "${COPILOT_CACHE_HOME}" == "${COPILOT_HOME}"* ]]; then
+copilot_cache_home="$(resolve_env_var "COPILOT_CACHE_HOME")"
+copilot_home="$(resolve_env_var "COPILOT_HOME")"
+
+if [[ -n "${copilot_cache_home:-}" ]]; then
+  if [[ -n "${copilot_home:-}" && "${copilot_cache_home}" == "${copilot_home}"* ]]; then
     container_env_entries+=("\"COPILOT_CACHE_HOME\": \"/opt/host-caches/copilot-home/cache\"")
   else
     mounts+=("source=\${localEnv:COPILOT_CACHE_HOME},target=/opt/host-caches/copilot-cache,type=bind,consistency=cached")

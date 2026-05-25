@@ -74,6 +74,12 @@ else
   fail "Missing PowerShell feature"
 fi
 
+if has_feature "ghcr.io/azure/azure-dev/azd:latest"; then
+  pass "Azure Developer CLI (azd) feature present"
+else
+  fail "Missing Azure Developer CLI feature"
+fi
+
 if pwsh -NoProfile -Command "\$cfg = Get-Content -Raw '$config_path' | ConvertFrom-Json -AsHashtable; if (\$cfg.ContainsKey('postCreateCommand')) { exit 0 } else { exit 1 }" >/dev/null 2>&1; then
   pass "postCreateCommand exists"
 else
@@ -125,7 +131,7 @@ fi
 if pwsh -NoProfile -Command "\$cfg = Get-Content -Raw '$config_path' | ConvertFrom-Json -AsHashtable; \$mounts = @(); if (\$cfg.ContainsKey('mounts') -and \$null -ne \$cfg.mounts) { \$mounts = @([string[]]\$cfg.mounts) }; if (\$mounts -match '/opt/host-caches/') { exit 0 } else { exit 1 }" >/dev/null 2>&1; then
   pass "cache mounts present"
 else
-  warn "Cache mounts are not configured on this host (set cache env vars, then rerun generate-cache-mount-config.sh and merge-devcontainer-config.sh)"
+  warn "Cache mounts are not present in devcontainer.json (live host env is not read here; regenerate cache config and merge)"
 fi
 
 required_cache_envs=(
@@ -143,7 +149,7 @@ for env_name in "${required_cache_envs[@]}"; do
   if pwsh -NoProfile -Command "\$cfg = Get-Content -Raw '$config_path' | ConvertFrom-Json -AsHashtable; if (\$cfg.containerEnv.ContainsKey('$env_name')) { exit 0 } else { exit 1 }" >/dev/null 2>&1; then
     pass "containerEnv includes $env_name"
   else
-    warn "containerEnv missing $env_name (set host env var and regenerate cache mounts)"
+    warn "containerEnv missing $env_name (validator checks devcontainer.json only; regenerate cache config and merge)"
   fi
 done
 

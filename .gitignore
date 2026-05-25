@@ -13,3 +13,4 @@
 # Host-specific devcontainer generated artifacts
 .devcontainer/cache-mounts.generated.json
 .devcontainer/gitconfig.effective
+.azure
