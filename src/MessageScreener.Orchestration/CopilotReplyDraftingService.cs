@@ -36,13 +36,41 @@ public interface ICopilotReplyDraftingService
         CommunicationTwinProfile profile,
         string? communicationTwinSkillContent,
         CancellationToken cancellationToken);
+
+    ValueTask<CopilotDraftProbeResult> ProbeDraftAsync(
+        TeamsInboundMessage message,
+        CommunicationTwinProfile profile,
+        string? communicationTwinSkillContent,
+        CancellationToken cancellationToken);
 }
+
+public sealed record CopilotDraftProbeResult(bool Success, string DraftReply, string ReasonCode);
 
 public sealed class CopilotReplyDraftingService(
     IOptions<MessageScreenerCopilotOptions> options,
     ILogger<CopilotReplyDraftingService> logger) : ICopilotReplyDraftingService
 {
     public async ValueTask<string> DraftReplyAsync(
+        TeamsInboundMessage message,
+        CommunicationTwinProfile profile,
+        string? communicationTwinSkillContent,
+        CancellationToken cancellationToken)
+    {
+        CopilotDraftProbeResult probe = await ProbeDraftAsync(
+            message,
+            profile,
+            communicationTwinSkillContent,
+            cancellationToken);
+
+        if (probe.Success)
+        {
+            return probe.DraftReply;
+        }
+
+        return BuildFallbackReply(profile.OwnerDisplayName);
+    }
+
+    public async ValueTask<CopilotDraftProbeResult> ProbeDraftAsync(
         TeamsInboundMessage message,
         CommunicationTwinProfile profile,
         string? communicationTwinSkillContent,
@@ -86,22 +114,22 @@ public sealed class CopilotReplyDraftingService(
             if (response is null)
             {
                 CopilotHarnessLog.ReplyDraftEmpty(logger);
-                return BuildFallbackReply(profile.OwnerDisplayName);
+                return new CopilotDraftProbeResult(false, string.Empty, "empty_response");
             }
 
             string? content = response.Data?.Content;
             if (string.IsNullOrWhiteSpace(content))
             {
                 CopilotHarnessLog.ReplyDraftEmpty(logger);
-                return BuildFallbackReply(profile.OwnerDisplayName);
+                return new CopilotDraftProbeResult(false, string.Empty, "empty_content");
             }
 
-            return content.Trim();
+            return new CopilotDraftProbeResult(true, content.Trim(), "ok");
         }
         catch (Exception ex)
         {
             CopilotHarnessLog.ReplyDraftFailed(logger, ex.Message);
-            return BuildFallbackReply(profile.OwnerDisplayName);
+            return new CopilotDraftProbeResult(false, string.Empty, "exception");
         }
     }
 

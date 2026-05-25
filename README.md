@@ -236,6 +236,23 @@ Optional owner-scoped audit reads can be enabled with:
 
 When configured, recent forward audit entries are available from `GET /api/audit/forwards` with header `X-MessageScreener-Owner-Key: <configured key>`.
 
+Copilot runtime readiness is also available through:
+
+- `GET /api/readiness/copilot`
+
+This endpoint uses the same `X-MessageScreener-Owner-Key` header and returns:
+
+- `200` when all checks pass
+- `503` when one or more checks fail
+
+Readiness checks include:
+
+1. Persona file exists and is non-default.
+2. GitHub token is configured for runtime Copilot SDK sessions.
+3. MCP servers are discovered and at least one is connected.
+4. Skills are loaded and at least one `message-screener` skill is enabled.
+5. A live Copilot draft probe succeeds.
+
 `MESSAGE_SCREENER_TEAMS_BOT_ID` is produced by infra deployment from the managed identity client ID and does not need to be set manually.
 
 If those values are missing, the hook logs a skip message and deployment continues safely.

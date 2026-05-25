@@ -41,6 +41,7 @@ builder.Services.AddSingleton<ITriggerPolicy, TeamsTriggerPolicy>();
 builder.Services.AddScoped<IMessageIntakeService, MessageIntakeService>();
 builder.Services.AddSingleton<ICommunicationTwinService, CommunicationTwinService>();
 builder.Services.AddSingleton<ICopilotReplyDraftingService, CopilotReplyDraftingService>();
+builder.Services.AddSingleton<ICopilotReadinessService, CopilotReadinessService>();
 builder.Services.AddSingleton<ICallerAutoResponseComposer, CallerAutoResponseComposer>();
 builder.Services.AddSingleton<IGhcpAgentHarness, GhcpAgentHarness>();
 builder.Services.AddSingleton<IPersonalReviewConversationRegistry, InMemoryPersonalReviewConversationRegistry>();
@@ -115,6 +116,33 @@ app.MapGet("/api/audit/forwards", async (
 
     IReadOnlyList<ForwardAuditEntry> entries = await forwardAuditStore.GetRecentAsync(limit, cancellationToken);
     return Results.Ok(entries);
+});
+
+app.MapGet("/api/readiness/copilot", async (
+    HttpRequest request,
+    ICopilotReadinessService copilotReadinessService,
+    IOptions<MessageScreenerAuditOptions> auditOptions,
+    CancellationToken cancellationToken) =>
+{
+    string? configuredKey = auditOptions.Value.OwnerReadApiKey;
+    if (string.IsNullOrWhiteSpace(configuredKey))
+    {
+        return Results.NotFound();
+    }
+
+    if (!request.Headers.TryGetValue("X-MessageScreener-Owner-Key", out var providedKey) ||
+        !string.Equals(providedKey.ToString(), configuredKey, StringComparison.Ordinal))
+    {
+        return Results.Forbid();
+    }
+
+    CopilotReadinessReport report = await copilotReadinessService.EvaluateAsync(cancellationToken);
+    if (report.Ready)
+    {
+        return Results.Ok(report);
+    }
+
+    return Results.Json(report, statusCode: StatusCodes.Status503ServiceUnavailable);
 });
 
 app.MapPost("/api/intake/forward", async (
