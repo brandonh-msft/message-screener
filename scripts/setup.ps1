@@ -1,3 +1,4 @@
+[CmdletBinding()]
 param(
     [string]$CopilotCliPath = "copilot",
     [string]$CopilotModel = "gpt-5.5",
@@ -150,7 +151,7 @@ try {
         "--yolo", "--no-ask-user",
         "--effort", "high",
         "--silent",
-        "--output-format", "json"
+        "--output-format", "text"
     )
 
     if (-not [string]::IsNullOrWhiteSpace($CopilotModel)) {
@@ -266,10 +267,3 @@ Write-Host "Communication twin JSON created at: $communicationTwinPath"
 Write-Host "Communication twin skill created at: $communicationTwinSkillPath"
 Write-Host "Prompt source: $promptPath"
 Write-Host "Generated runtime twin artifacts are under src/MessageScreener.Api/copilot-config."
-
-if (-not $SkipCopilotRuntimeHook) {
-    Write-Host "Configuring runtime Copilot extension hook..."
-    & (Join-Path $PSScriptRoot "setup-copilot-runtime.ps1") -Force:$Force
-}
-
-Write-Host "Next step: dotnet build MessageScreener.slnx -warnaserror"
