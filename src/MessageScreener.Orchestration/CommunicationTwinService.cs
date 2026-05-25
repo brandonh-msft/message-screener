@@ -9,12 +9,6 @@ namespace MessageScreener.Orchestration
     {
         public const string SectionName = "MessageScreener";
 
-        public string OwnerDisplayName { get; init; } = "the owner";
-
-        public string PersonaSummary { get; init; } = "Professional, concise, and direct.";
-
-        public string Tone { get; init; } = "professional";
-
         public string CommunicationTwinPath { get; init; } = "config/communication-twin.json";
 
         public string CommunicationTwinSkillPath { get; init; } = "config/copilot-runtime/skills/communication-twin/SKILL.md";
@@ -29,6 +23,10 @@ namespace MessageScreener.Orchestration
         IOptions<MessageScreenerAgentOptions> options,
         ILogger<CommunicationTwinService> logger) : ICommunicationTwinService
     {
+        private const string DefaultOwnerDisplayName = "the owner";
+        private const string DefaultPersonaSummary = "Professional, concise, and direct.";
+        private const string DefaultTone = "professional";
+
         private static readonly JsonSerializerOptions JsonSerializerOptions = new()
         {
             PropertyNameCaseInsensitive = true,
@@ -73,17 +71,17 @@ namespace MessageScreener.Orchestration
 
             return new CommunicationTwinProfile(
                 OwnerDisplayName: twin.OwnerDisplayName,
-                PersonaSummary: twin.PersonaSummary ?? current.PersonaSummary,
+                PersonaSummary: twin.PersonaSummary ?? DefaultPersonaSummary,
                 PreferredPhrases: preferredPhrases,
                 AvoidPhrases: avoidPhrases,
-                Tone: twin.Tone ?? current.Tone);
+                Tone: twin.Tone ?? DefaultTone);
         }
 
         private static CommunicationTwinProfile BuildDefaultProfile(MessageScreenerAgentOptions current)
         {
             return new CommunicationTwinProfile(
-                OwnerDisplayName: current.OwnerDisplayName,
-                PersonaSummary: current.PersonaSummary,
+                OwnerDisplayName: DefaultOwnerDisplayName,
+                PersonaSummary: DefaultPersonaSummary,
                 PreferredPhrases:
                 [
                     "Thanks for reaching out.",
@@ -96,7 +94,7 @@ namespace MessageScreener.Orchestration
                     "Per my previous email",
                     "No worries",
                 ],
-                Tone: current.Tone);
+                Tone: DefaultTone);
         }
 
         private static string ResolveCommunicationTwinPath(string configuredPath)
