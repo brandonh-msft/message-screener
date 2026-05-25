@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Azure.Core;
 using Azure.Identity;
 using MessageScreener.Api;
@@ -28,9 +27,6 @@ builder.Services
 builder.Services
     .AddOptions<MessageScreenerTeamsOptions>()
     .BindConfiguration(MessageScreenerTeamsOptions.SectionName);
-builder.Services
-    .AddOptions<GraphWebhookOptions>()
-    .BindConfiguration(GraphWebhookOptions.SectionName);
 builder.Services.AddSingleton<IInboundEventStore, InMemoryInboundEventStore>();
 builder.Services.AddSingleton<ITriggerPolicy, TeamsTriggerPolicy>();
 builder.Services.AddScoped<IMessageIntakeService, MessageIntakeService>();
@@ -55,7 +51,6 @@ builder.Services.AddSingleton(static serviceProvider =>
 builder.Services.AddScoped<ITeamsMessageClient, TeamsGraphMessageClient>();
 builder.Services.AddScoped<IReviewDeliveryService, ReviewDeliveryService>();
 builder.Services.AddHttpClient();
-builder.Services.AddHostedService<GraphSubscriptionHostedService>();
 
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource =>
@@ -97,21 +92,8 @@ app.MapGet("/health", () => Results.Ok(new
     utcTimestamp = DateTimeOffset.UtcNow,
 }));
 
-app.MapGet("/webhooks/graph", (HttpRequest request) =>
-{
-    if (request.Query.TryGetValue("validationToken", out var validationToken) &&
-        !string.IsNullOrWhiteSpace(validationToken))
-    {
-        return Results.Text(validationToken.ToString(), "text/plain");
-    }
-
-    return Results.BadRequest();
-});
-
-app.MapPost("/webhooks/graph", async (
+app.MapPost("/api/intake/forward", async (
     HttpRequest request,
-    GraphServiceClient graphServiceClient,
-    IOptions<GraphWebhookOptions> graphWebhookOptions,
     IMessageIntakeService intakeService,
     ICommunicationTwinService communicationTwinService,
     ICallerAutoResponseComposer callerAutoResponseComposer,
@@ -119,106 +101,21 @@ app.MapPost("/webhooks/graph", async (
     ILoggerFactory loggerFactory,
     CancellationToken cancellationToken) =>
 {
-    using Activity activity = new Activity(ServiceName + ".GraphWebhook").Start();
-    ILogger logger = loggerFactory.CreateLogger("MessageScreener.GraphWebhook");
-    JsonDocument payload = await JsonDocument.ParseAsync(request.Body, cancellationToken: cancellationToken);
-    JsonElement root = payload.RootElement;
+    using Activity activity = new Activity(ServiceName + ".ForwardIntake").Start();
+    ILogger logger = loggerFactory.CreateLogger("MessageScreener.ForwardIntake");
 
-    // Graph subscriptions post a notification envelope with a top-level 'value' array.
-    if (root.TryGetProperty("value", out JsonElement valueElement) && valueElement.ValueKind == JsonValueKind.Array)
-    {
-        var notifications = JsonSerializer.Deserialize<GraphChangeNotificationEnvelope>(
-            root.GetRawText(),
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    TeamsInboundMessage? forwardMessage = await JsonSerializer.DeserializeAsync<TeamsInboundMessage>(
+        request.Body,
+        new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
+        cancellationToken);
 
-        if (notifications?.Value is null || notifications.Value.Count == 0)
-        {
-            AppLog.GraphNotificationBatchSkipped(logger, "empty_notification_batch");
-            return Results.Ok();
-        }
-
-        GraphWebhookOptions webhookOptions = graphWebhookOptions.Value;
-        string? expectedClientState = FirstNonEmpty(
-            webhookOptions.ClientState,
-            Environment.GetEnvironmentVariable("MessageScreener__GraphWebhook__ClientState"),
-            Environment.GetEnvironmentVariable("MESSAGE_SCREENER_GRAPH_WEBHOOK_CLIENT_STATE"));
-
-        foreach (GraphChangeNotification notification in notifications.Value)
-        {
-            if (!string.IsNullOrWhiteSpace(expectedClientState) &&
-                !string.Equals(notification.ClientState, expectedClientState, StringComparison.Ordinal))
-            {
-                AppLog.GraphNotificationRejectedClientState(logger, notification.SubscriptionId ?? "unknown");
-                continue;
-            }
-
-            if (!TryParseGraphChatMessageReference(notification.Resource, out string chatId, out string messageId))
-            {
-                AppLog.GraphNotificationBatchSkipped(logger, $"unsupported_resource:{notification.Resource}");
-                continue;
-            }
-
-            try
-            {
-                var graphMessage = await graphServiceClient
-                    .Chats[chatId]
-                    .Messages[messageId]
-                    .GetAsync(cancellationToken: cancellationToken);
-
-                var chat = await graphServiceClient
-                    .Chats[chatId]
-                    .GetAsync(cancellationToken: cancellationToken);
-
-                if (graphMessage is null)
-                {
-                    AppLog.GraphNotificationBatchSkipped(logger, $"missing_message:{chatId}/{messageId}");
-                    continue;
-                }
-
-                ConversationScope scope = string.Equals(chat?.ChatType?.ToString(), "oneOnOne", StringComparison.OrdinalIgnoreCase)
-                    ? ConversationScope.OneOnOne
-                    : ConversationScope.GroupChat;
-
-                var inboundMessage = new TeamsInboundMessage(
-                    EventId: $"graph:{chatId}:{messageId}",
-                    TenantId: notification.TenantId ?? string.Empty,
-                    ConversationId: chatId,
-                    SenderAadObjectId: graphMessage.From?.User?.Id ?? string.Empty,
-                    BodyPlainText: StripHtml(graphMessage.Body?.Content),
-                    Scope: scope,
-                    IsAtMention: (graphMessage.Mentions?.Count ?? 0) > 0,
-                    OccurredAtUtc: graphMessage.CreatedDateTime ?? DateTimeOffset.UtcNow);
-
-                await ProcessInboundMessageAsync(
-                    inboundMessage,
-                    intakeService,
-                    communicationTwinService,
-                    callerAutoResponseComposer,
-                    reviewDeliveryService,
-                    logger,
-                    cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                AppLog.GraphNotificationBatchSkipped(logger, $"graph_fetch_failed:{ex.Message}");
-            }
-        }
-
-        return Results.Ok();
-    }
-
-    // Backward-compatible direct contract payload path.
-    TeamsInboundMessage? directMessage = JsonSerializer.Deserialize<TeamsInboundMessage>(
-        root.GetRawText(),
-        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-    if (directMessage is null)
+    if (forwardMessage is null)
     {
         return Results.BadRequest();
     }
 
-    MessageIntakeResult directResult = await ProcessInboundMessageAsync(
-        directMessage,
+    MessageIntakeResult result = await ProcessInboundMessageAsync(
+        forwardMessage,
         intakeService,
         communicationTwinService,
         callerAutoResponseComposer,
@@ -226,7 +123,7 @@ app.MapPost("/webhooks/graph", async (
         logger,
         cancellationToken);
 
-    return Results.Ok(directResult);
+    return Results.Ok(result);
 });
 
 app.MapPost("/api/messages", async (
@@ -315,7 +212,7 @@ static async ValueTask<MessageIntakeResult> ProcessInboundMessageAsync(
 {
     MessageIntakeResult intakeResult = await intakeService.IntakeAsync(message, cancellationToken);
 
-    AppLog.GraphWebhookProcessed(
+    AppLog.InboundIntakeProcessed(
         logger,
         intakeResult.Accepted,
         intakeResult.Duplicate,
@@ -332,59 +229,6 @@ static async ValueTask<MessageIntakeResult> ProcessInboundMessageAsync(
     }
 
     return intakeResult;
-}
-
-static bool TryParseGraphChatMessageReference(string? resource, out string chatId, out string messageId)
-{
-    chatId = string.Empty;
-    messageId = string.Empty;
-
-    if (string.IsNullOrWhiteSpace(resource))
-    {
-        return false;
-    }
-
-    // Graph resources can appear as chats/{chatId}/messages/{messageId} or chats('{chatId}')/messages('{messageId}').
-    Match directPathMatch = Regex.Match(resource, "chats/([^/]+)/messages/([^/?]+)", RegexOptions.IgnoreCase);
-    if (directPathMatch.Success)
-    {
-        chatId = directPathMatch.Groups[1].Value;
-        messageId = directPathMatch.Groups[2].Value;
-        return true;
-    }
-
-    Match odataPathMatch = Regex.Match(resource, "chats\\('([^']+)'\\)/messages\\('([^']+)'\\)", RegexOptions.IgnoreCase);
-    if (odataPathMatch.Success)
-    {
-        chatId = odataPathMatch.Groups[1].Value;
-        messageId = odataPathMatch.Groups[2].Value;
-        return true;
-    }
-
-    return false;
-}
-
-static string StripHtml(string? content)
-{
-    if (string.IsNullOrWhiteSpace(content))
-    {
-        return string.Empty;
-    }
-
-    return Regex.Replace(content, "<.*?>", string.Empty).Trim();
-}
-
-static string? FirstNonEmpty(params string?[] values)
-{
-    foreach (string? value in values)
-    {
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            return value;
-        }
-    }
-
-    return null;
 }
 
 static string? GetJsonString(JsonElement root, string propertyName)

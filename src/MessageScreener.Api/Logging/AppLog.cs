@@ -15,8 +15,8 @@ namespace MessageScreener.Api.Logging
         [LoggerMessage(
             EventId = 1001,
             Level = LogLevel.Information,
-            Message = "Graph webhook processed. accepted={Accepted} duplicate={Duplicate} shouldCreateReview={ShouldCreateReview} intakeReason={IntakeReason} triggerReason={TriggerReason}")]
-        public static partial void GraphWebhookProcessed(
+            Message = "Inbound intake processed. accepted={Accepted} duplicate={Duplicate} shouldCreateReview={ShouldCreateReview} intakeReason={IntakeReason} triggerReason={TriggerReason}")]
+        public static partial void InboundIntakeProcessed(
             ILogger logger,
             bool accepted,
             bool duplicate,
@@ -52,42 +52,5 @@ namespace MessageScreener.Api.Logging
             Message = "Bot reply failed. {ErrorDetail}")]
         public static partial void BotReplyFailed(ILogger logger, string errorDetail);
 
-        [LoggerMessage(
-            EventId = 1006,
-            Level = LogLevel.Information,
-            Message = "Graph subscription created. id={SubscriptionId} resource={Resource} notificationUrl={NotificationUrl} expiresAt={ExpirationUtc}")]
-        public static partial void GraphSubscriptionCreated(
-            ILogger logger,
-            string subscriptionId,
-            string resource,
-            string notificationUrl,
-            DateTimeOffset expirationUtc);
-
-        [LoggerMessage(
-            EventId = 1007,
-            Level = LogLevel.Information,
-            Message = "Graph subscription renewed. id={SubscriptionId} expiresAt={ExpirationUtc}")]
-        public static partial void GraphSubscriptionRenewed(
-            ILogger logger,
-            string subscriptionId,
-            DateTimeOffset expirationUtc);
-
-        [LoggerMessage(
-            EventId = 1008,
-            Level = LogLevel.Warning,
-            Message = "Graph subscription skipped. reason={ReasonCode}")]
-        public static partial void GraphSubscriptionSkipped(ILogger logger, string reasonCode);
-
-        [LoggerMessage(
-            EventId = 1009,
-            Level = LogLevel.Warning,
-            Message = "Graph notification rejected due to clientState mismatch. subscriptionId={SubscriptionId}")]
-        public static partial void GraphNotificationRejectedClientState(ILogger logger, string subscriptionId);
-
-        [LoggerMessage(
-            EventId = 1010,
-            Level = LogLevel.Warning,
-            Message = "Graph notification batch item skipped. reason={ReasonCode}")]
-        public static partial void GraphNotificationBatchSkipped(ILogger logger, string reasonCode);
     }
 }

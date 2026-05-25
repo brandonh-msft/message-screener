@@ -103,24 +103,6 @@ pwsh ./scripts/azd-generate-teams-manifest.ps1
 
 This single script resolves azd environment values and generates the Teams manifest directly.
 
-`azure.yaml` also defines a `postprovision` hook that calls:
-
-```powershell
-pwsh ./scripts/azd-configure-graph-permissions.ps1
-```
-
-This script assigns required Microsoft Graph application roles to the workload managed identity:
-
-- `Chat.Read.All`
-- `Chat.ReadWrite.All`
-
-The principal running `azd` must have tenant permissions to create app role assignments in Microsoft Entra ID to complete this step automatically.
-
-If you do not have tenant admin permissions, the hook logs a warning and provisioning continues. In that mode:
-
-- Teams bot command flows (for example `help`) still work.
-- Graph webhook auto-subscription and Graph-based auto-replies require an admin to grant Graph app permissions.
-
 ### Provisioned v1 Infrastructure
 
 `infra/main.bicep` provisions the baseline required for v1:
@@ -174,4 +156,3 @@ If those values are missing, the hook logs a skip message and deployment continu
 
 - Knowledge base root: `docs/solutions/`
 - This session's learning: `docs/solutions/integration-issues/copilot-cli-shim-shadowing-devcontainer-2026-05-24.md`
-- Non-admin Graph permissions and auto-screening boundary: `docs/solutions/integration-issues/automatic-dm-screening-requires-tenant-admin-graph-consent-2026-05-24.md`
