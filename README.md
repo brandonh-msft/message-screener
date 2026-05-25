@@ -44,6 +44,33 @@ If you need to recreate your profile:
 pwsh ./scripts/setup.ps1 -Force
 ```
 
+### One-Command Copilot Runtime Hook
+
+To imbue runtime GitHub Copilot SDK sessions with repo MCP/skills/agent configuration in one step:
+
+```powershell
+pwsh ./scripts/setup-copilot-runtime.ps1 -Force
+```
+
+This hook:
+
+- validates `.mcp.json` exists and is used via runtime config discovery
+- ensures skill directories exist (`.github/skills`, `src/MessageScreener.Api/config/skills`)
+- writes `src/MessageScreener.Api/config/copilot.runtime.settings.sample.json`
+
+`setup.ps1` runs this hook automatically unless you pass:
+
+```powershell
+pwsh ./scripts/setup.ps1 -SkipCopilotRuntimeHook
+```
+
+To add custom capability quickly:
+
+1. Add MCP servers to `.mcp.json`.
+2. Add team/domain skills under `.github/skills/`.
+3. Add runtime-local skills under `src/MessageScreener.Api/config/skills/`.
+4. Optionally set `MESSAGE_SCREENER_COPILOT_AGENT` and `MESSAGE_SCREENER_COPILOT_MODEL`.
+
 ## Dev Container
 
 This repository includes a dev container with the tooling needed for setup, build, and deploy workflows:

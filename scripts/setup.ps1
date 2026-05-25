@@ -1,6 +1,7 @@
 param(
     [string]$CopilotCliPath = "copilot",
     [string]$CopilotModel,
+    [switch]$SkipCopilotRuntimeHook,
     [switch]$Force
 )
 
@@ -243,4 +244,10 @@ Set-Content -Path $communicationTwinSkillPath -Value $skillBody -Encoding utf8
 Write-Host "Communication twin JSON created at: $communicationTwinPath"
 Write-Host "Communication twin skill created at: $communicationTwinSkillPath"
 Write-Host "These files are deployment-shipped runtime artifacts in a well-known path under src/MessageScreener.Api/config."
+
+if (-not $SkipCopilotRuntimeHook) {
+    Write-Host "Configuring runtime Copilot extension hook..."
+    & (Join-Path $PSScriptRoot "setup-copilot-runtime.ps1") -Force:$Force
+}
+
 Write-Host "Next step: dotnet build MessageScreener.slnx -warnaserror"
