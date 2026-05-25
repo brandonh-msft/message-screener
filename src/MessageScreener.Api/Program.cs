@@ -106,15 +106,17 @@ app.MapPost("/api/intake/forward", async (
     using Activity activity = new Activity(ServiceName + ".ForwardIntake").Start();
     ILogger logger = loggerFactory.CreateLogger("MessageScreener.ForwardIntake");
 
-    TeamsInboundMessage? forwardMessage = await JsonSerializer.DeserializeAsync<TeamsInboundMessage>(
+    ForwardedMessageIntakeRequest? forwardRequest = await JsonSerializer.DeserializeAsync<ForwardedMessageIntakeRequest>(
         request.Body,
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true },
         cancellationToken);
 
-    if (forwardMessage is null)
+    if (forwardRequest is null)
     {
         return Results.BadRequest();
     }
+
+    TeamsInboundMessage forwardMessage = CreateInboundMessage(forwardRequest);
 
     MessageIntakeResult result = await ProcessInboundMessageAsync(
         forwardMessage,
@@ -163,11 +165,13 @@ app.MapPost("/api/messages", async (
     if (string.Equals(activityType, "invoke", StringComparison.OrdinalIgnoreCase) &&
         string.Equals(invokeName, "composeExtension/submitAction", StringComparison.OrdinalIgnoreCase))
     {
-        TeamsInboundMessage? forwardedMessage = TryParseForwardedMessageFromInvoke(root);
-        if (forwardedMessage is null)
+        ForwardedMessageIntakeRequest? forwardedRequest = TryParseForwardedMessageFromInvoke(root);
+        if (forwardedRequest is null)
         {
             return Results.BadRequest();
         }
+
+        TeamsInboundMessage forwardedMessage = CreateInboundMessage(forwardedRequest);
 
         MessageIntakeResult intakeResult = await ProcessInboundMessageAsync(
             forwardedMessage,
@@ -423,7 +427,7 @@ static async ValueTask<string?> TrySendBotReplyAsync(
     return $"connector_send_failed: {(int)response.StatusCode} {response.ReasonPhrase}; body={responseBody}";
 }
 
-static TeamsInboundMessage? TryParseForwardedMessageFromInvoke(JsonElement root)
+static ForwardedMessageIntakeRequest? TryParseForwardedMessageFromInvoke(JsonElement root)
 {
     if (!root.TryGetProperty("value", out JsonElement valueElement) ||
         valueElement.ValueKind != JsonValueKind.Object)
@@ -497,8 +501,7 @@ static TeamsInboundMessage? TryParseForwardedMessageFromInvoke(JsonElement root)
 
     ConversationScope scope = isOneOnOne ? ConversationScope.OneOnOne : ConversationScope.GroupChat;
 
-    return new TeamsInboundMessage(
-        EventId: $"teams-action:{conversationId}:{messageId}",
+    return new ForwardedMessageIntakeRequest(
         TenantId: tenantId,
         ConversationId: conversationId,
         SourceMessageId: messageId,
@@ -510,6 +513,22 @@ static TeamsInboundMessage? TryParseForwardedMessageFromInvoke(JsonElement root)
         IsAtMention: true,
         OccurredAtUtc: DateTimeOffset.UtcNow);
 }
+
+    static TeamsInboundMessage CreateInboundMessage(ForwardedMessageIntakeRequest request)
+    {
+        return new TeamsInboundMessage(
+        EventId: $"teams-action:{request.ConversationId}:{request.SourceMessageId}",
+        TenantId: request.TenantId,
+        ConversationId: request.ConversationId,
+        SourceMessageId: request.SourceMessageId,
+        SenderDisplayName: request.SenderDisplayName,
+        SenderIdentityKey: request.SenderIdentityKey,
+        SenderIdentityKeyKind: request.SenderIdentityKeyKind,
+        BodyPlainText: request.BodyPlainText,
+        Scope: request.Scope,
+        IsAtMention: request.IsAtMention,
+        OccurredAtUtc: request.OccurredAtUtc);
+    }
 
 static string StripHtml(string? content)
 {

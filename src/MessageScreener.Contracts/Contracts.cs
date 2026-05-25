@@ -26,6 +26,18 @@ namespace MessageScreener.Contracts
         bool IsAtMention,
         DateTimeOffset OccurredAtUtc);
 
+    public sealed record ForwardedMessageIntakeRequest(
+        string TenantId,
+        string ConversationId,
+        string SourceMessageId,
+        string SenderDisplayName,
+        string? SenderIdentityKey,
+        SenderIdentityKeyKind SenderIdentityKeyKind,
+        string BodyPlainText,
+        ConversationScope Scope,
+        bool IsAtMention,
+        DateTimeOffset OccurredAtUtc);
+
     public sealed record TriggerEvaluationResult(
         bool ShouldCreateReview,
         string ReasonCode);
