@@ -138,7 +138,7 @@ app.MapPost("/api/intake/forward", async (
 
     TeamsInboundMessage forwardMessage = CreateInboundMessage(forwardRequest);
 
-    MessageIntakeResult result = await ProcessInboundMessageAsync(
+    InboundProcessingOutcome result = await ProcessInboundMessageAsync(
         forwardMessage,
         intakeService,
         forwardAuditStore,
@@ -148,7 +148,7 @@ app.MapPost("/api/intake/forward", async (
         logger,
         cancellationToken);
 
-    return Results.Ok(result);
+    return Results.Ok(result.IntakeResult);
 });
 
 app.MapPost("/api/messages", async (
@@ -200,7 +200,7 @@ app.MapPost("/api/messages", async (
 
         try
         {
-            MessageIntakeResult intakeResult = await ProcessInboundMessageAsync(
+            InboundProcessingOutcome processingOutcome = await ProcessInboundMessageAsync(
                 forwardedMessage,
                 intakeService,
                 forwardAuditStore,
@@ -210,12 +210,7 @@ app.MapPost("/api/messages", async (
                 logger,
                 cancellationToken);
 
-            string statusText = intakeResult.ProcessingState switch
-            {
-                MessageProcessingState.DuplicateInFlight => "Message is already being processed by Message Screener.",
-                MessageProcessingState.DuplicateCompleted => "Message was already forwarded to Message Screener.",
-                _ => "Message forwarded to Message Screener.",
-            };
+            string statusText = CreateComposeExtensionStatusText(processingOutcome);
 
             return Results.Ok(CreateComposeExtensionStatus(statusText));
         }
@@ -282,7 +277,7 @@ AppLog.ServiceStarted(startupLogger, ServiceName, ServiceVersion, app.Environmen
 
 app.Run();
 
-static async ValueTask<MessageIntakeResult> ProcessInboundMessageAsync(
+static async ValueTask<InboundProcessingOutcome> ProcessInboundMessageAsync(
     TeamsInboundMessage message,
     IMessageIntakeService intakeService,
     IForwardAuditStore forwardAuditStore,
@@ -293,6 +288,7 @@ static async ValueTask<MessageIntakeResult> ProcessInboundMessageAsync(
     CancellationToken cancellationToken)
 {
     MessageIntakeResult intakeResult = await intakeService.IntakeAsync(message, cancellationToken);
+    ReviewDeliveryResult deliveryResult = new(ReviewDeliveryStatus.NotAttempted, "not_required");
 
     AppLog.InboundIntakeProcessed(
         logger,
@@ -309,7 +305,7 @@ static async ValueTask<MessageIntakeResult> ProcessInboundMessageAsync(
             CommunicationTwinProfile twinProfile = communicationTwinService.GetInitialProfile();
             var pendingApprovalReply = callerAutoResponseComposer.ComposePendingApprovalReply(twinProfile.OwnerDisplayName);
 
-            await reviewDeliveryService.SendPendingApprovalReplyAsync(message, pendingApprovalReply, cancellationToken);
+            deliveryResult = await reviewDeliveryService.SendPendingApprovalReplyAsync(message, pendingApprovalReply, cancellationToken);
         }
 
         await forwardAuditStore.AppendAsync(
@@ -317,7 +313,7 @@ static async ValueTask<MessageIntakeResult> ProcessInboundMessageAsync(
             cancellationToken);
 
         await intakeService.MarkCompletedAsync(intakeResult, cancellationToken);
-        return intakeResult;
+        return new InboundProcessingOutcome(intakeResult, deliveryResult);
     }
     catch
     {
@@ -625,3 +621,38 @@ static string? FirstNonEmpty(params string?[] values)
 
     return null;
 }
+
+static string CreateComposeExtensionStatusText(InboundProcessingOutcome outcome)
+{
+    MessageIntakeResult intakeResult = outcome.IntakeResult;
+    ReviewDeliveryResult deliveryResult = outcome.ReviewDeliveryResult;
+
+    if (intakeResult.ProcessingState == MessageProcessingState.DuplicateInFlight)
+    {
+        return "Message is already being processed by Message Screener.";
+    }
+
+    if (intakeResult.ProcessingState == MessageProcessingState.DuplicateCompleted)
+    {
+        return "Message was already forwarded to Message Screener.";
+    }
+
+    if (!intakeResult.Trigger.ShouldCreateReview)
+    {
+        return "Message was received but did not meet screening criteria.";
+    }
+
+    return deliveryResult.Status switch
+    {
+        ReviewDeliveryStatus.Delivered => "Message forwarded to Message Screener.",
+        ReviewDeliveryStatus.SkippedAutoReplyDisabled => "Forward received, but automatic review delivery is disabled.",
+        ReviewDeliveryStatus.SkippedMissingConversationId => "Forward received, but personal Message Screener destination is not configured yet. Open personal chat and send 'help'.",
+        ReviewDeliveryStatus.SkippedMissingServiceUrl => "Forward received, but bot service URL is missing for delivery. Open personal chat and send 'help'.",
+        ReviewDeliveryStatus.FailedToDeliver => "Forward received, but delivery to Message Screener failed. Please retry from message actions.",
+        _ => "Forward received.",
+    };
+}
+
+sealed record InboundProcessingOutcome(
+    MessageIntakeResult IntakeResult,
+    ReviewDeliveryResult ReviewDeliveryResult);

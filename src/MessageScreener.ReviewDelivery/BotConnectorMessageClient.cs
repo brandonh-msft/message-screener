@@ -56,7 +56,6 @@ namespace MessageScreener.ReviewDelivery
             using HttpClient httpClient = httpClientFactory.CreateClient();
             using HttpResponseMessage response = await httpClient.SendAsync(requestMessage, cancellationToken);
             response.EnsureSuccessStatusCode();
-
         }
     }
 }

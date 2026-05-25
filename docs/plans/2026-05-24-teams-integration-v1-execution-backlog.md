@@ -31,7 +31,7 @@ source_plan: docs/plans/2026-05-24-teams-integration-v1-ce-plan.md
 |---|---|---|---|---|---|---|
 | T01 | M1 | Scaffold .NET 10 solution and projects for ingress, orchestrator, review, audit | Platform Eng | M | None | Build succeeds; solution structure supports CE-plan service boundaries |
 | T02 | M1 | Wire baseline OpenTelemetry traces/metrics/logs and source-generated logging templates | Observability Eng | M | T01 | Telemetry emitted from startup and one sample request path; no warnings |
-| T03 | M1 | Implement Graph webhook endpoint with validation and secure intake path | Integration Eng | M | T01 | Webhook validation handshake passes; ingress endpoint returns expected status codes |
+| T03 | M1 | Implement Teams activity endpoint with compose-action submit intake and secure payload validation | Integration Eng | M | T01 | composeExtension submit action is accepted on supported payloads; invalid payloads return deterministic fallback status |
 | T04 | M1 | Implement trigger filter matrix (1:1 + group @mention only; ignore channels and excluded events) | Integration Eng | L | T03 | Automated tests cover all trigger/non-trigger classes defined by R1-R5c |
 | T05 | M1 | Implement idempotency layer for duplicate create events | Backend Eng | M | T03 | Replay tests prove no duplicate cards/drafts/audit actions for same message identity |
 | T06 | M1 | Implement recency-check service contract and interaction-log write/read model | Backend Eng | L | T04, T05 | Deterministic known/recent decisions and configurable window behavior validated |

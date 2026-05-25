@@ -105,24 +105,24 @@ Wire startup telemetry and source-generated structured logging templates.
 - W5
 ```
 
-### T03 - Graph webhook intake and validation
-**Title:** `[T03][M1] Implement Graph webhook intake endpoint and validation`
+### T03 - Teams message-action intake and validation
+**Title:** `[T03][M1] Implement Teams message-action intake endpoint and validation`
 
 ```markdown
 ## Summary
-Implement secure Graph webhook intake and handshake validation endpoint.
+Implement secure Teams compose-action intake and payload validation endpoint.
 
 ## Scope
-- [ ] Webhook validation handshake endpoint
-- [ ] Event intake endpoint with signature/token checks
-- [ ] Structured logging for incoming event metadata
+- [ ] Compose-action submit intake endpoint
+- [ ] Payload validation and deterministic fallback status responses
+- [ ] Structured logging for intake and fallback metadata
 
 ## Dependencies
 - [ ] #<T01-issue-number> T01
 
 ## Acceptance Criteria
-- [ ] Webhook validation handshake succeeds
-- [ ] Intake endpoint returns expected status codes
+- [ ] Compose-action submit payloads are accepted on supported shape
+- [ ] Unsupported payloads return deterministic fallback status text
 - [ ] Invalid requests are rejected and logged
 
 ## Requirement Links

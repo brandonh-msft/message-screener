@@ -19,7 +19,7 @@ Primary outcomes:
 ## 2. Delivery Architecture (V1)
 
 Core services:
-- Ingress API: Graph webhook validation and event intake.
+- Ingress API: Teams bot activity intake and message-action submit handling.
 - Event orchestrator: idempotent state machine from trigger -> classify -> draft -> review card.
 - Drafting pipeline: retrieval/context assembly, confidence scoring, citations, guardrails.
 - Review delivery service: personal bot chat card rendering and action handling.
@@ -46,7 +46,7 @@ Runtime baseline:
 ## 4.1 W1 Triggering and Idempotent Ingestion
 
 Deliverables:
-- Teams webhook endpoint with subscription validation and event intake.
+- Teams activity endpoint with compose-action submit intake and payload validation.
 - Trigger filter:
   - include 1:1 and group chats
   - group requires explicit @mention
@@ -128,7 +128,7 @@ Acceptance tests:
 
 Deliverables:
 - End-to-end test harness for trigger classes, routing classes, and action flows.
-- Replay tests for duplicate webhook deliveries.
+- Replay tests for duplicate message-action deliveries.
 - Pilot scorecards for:
   - card delivery latency
   - time-to-compose readiness
