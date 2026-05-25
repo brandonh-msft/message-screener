@@ -22,5 +22,14 @@ namespace MessageScreener.ReviewDelivery
             ILogger logger,
             string conversationId,
             string reason);
+
+        [LoggerMessage(
+            EventId = 2003,
+            Level = LogLevel.Error,
+            Message = "Failed caller auto-reply delivery for conversation {ConversationId}. Reason={Reason}")]
+        public static partial void CallerAutoReplyFailed(
+            ILogger logger,
+            string conversationId,
+            string reason);
     }
 }

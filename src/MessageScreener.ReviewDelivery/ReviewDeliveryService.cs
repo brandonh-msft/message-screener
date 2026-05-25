@@ -60,10 +60,18 @@ namespace MessageScreener.ReviewDelivery
                 return;
             }
 
-            await _teamsMessageClient.SendMessageAsync(
-                targetConversationId,
-                pendingApprovalText,
-                cancellationToken);
+            try
+            {
+                await _teamsMessageClient.SendMessageAsync(
+                    targetConversationId,
+                    pendingApprovalText,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                ReviewDeliveryLog.CallerAutoReplyFailed(logger, targetConversationId, ex.Message);
+                return;
+            }
 
             ReviewDeliveryLog.CallerAutoReplyPrepared(
                 logger,

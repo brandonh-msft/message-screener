@@ -214,23 +214,33 @@ app.MapPost("/api/messages", async (
 
         TeamsInboundMessage forwardedMessage = CreateInboundMessage(forwardedRequest);
 
-        MessageIntakeResult intakeResult = await ProcessInboundMessageAsync(
-            forwardedMessage,
-            intakeService,
-            forwardAuditStore,
-            communicationTwinService,
-            callerAutoResponseComposer,
-            reviewDeliveryService,
-            logger,
-            cancellationToken);
-        string statusText = intakeResult.ProcessingState switch
+        try
         {
-            MessageProcessingState.DuplicateInFlight => "Message is already being processed by Message Screener.",
-            MessageProcessingState.DuplicateCompleted => "Message was already forwarded to Message Screener.",
-            _ => "Message forwarded to Message Screener.",
-        };
+            MessageIntakeResult intakeResult = await ProcessInboundMessageAsync(
+                forwardedMessage,
+                intakeService,
+                forwardAuditStore,
+                communicationTwinService,
+                callerAutoResponseComposer,
+                reviewDeliveryService,
+                logger,
+                cancellationToken);
 
-        return Results.Ok(CreateComposeExtensionStatus(statusText));
+            string statusText = intakeResult.ProcessingState switch
+            {
+                MessageProcessingState.DuplicateInFlight => "Message is already being processed by Message Screener.",
+                MessageProcessingState.DuplicateCompleted => "Message was already forwarded to Message Screener.",
+                _ => "Message forwarded to Message Screener.",
+            };
+
+            return Results.Ok(CreateComposeExtensionStatus(statusText));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to process composeExtension submit action.");
+            return Results.Ok(CreateComposeExtensionStatus(
+                "Message Screener is temporarily unavailable for this action. Open your personal Message Screener chat and paste the message manually."));
+        }
     }
 
     if (!string.Equals(activityType, "message", StringComparison.OrdinalIgnoreCase) ||
