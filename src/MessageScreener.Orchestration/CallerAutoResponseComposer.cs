@@ -1,15 +1,30 @@
+using MessageScreener.Contracts;
+
 namespace MessageScreener.Orchestration
 {
     public interface ICallerAutoResponseComposer
     {
-        string ComposePendingApprovalReply(string ownerDisplayName);
+        ValueTask<string> ComposePendingApprovalReplyAsync(
+            TeamsInboundMessage message,
+            CommunicationTwinProfile profile,
+            CancellationToken cancellationToken);
     }
 
-    public sealed class CallerAutoResponseComposer : ICallerAutoResponseComposer
+    public sealed class CallerAutoResponseComposer(
+        ICopilotReplyDraftingService copilotReplyDraftingService,
+        IGhcpAgentHarness ghcpAgentHarness) : ICallerAutoResponseComposer
     {
-        public string ComposePendingApprovalReply(string ownerDisplayName)
+        public async ValueTask<string> ComposePendingApprovalReplyAsync(
+            TeamsInboundMessage message,
+            CommunicationTwinProfile profile,
+            CancellationToken cancellationToken)
         {
-            return $"Hi! {ownerDisplayName} is using Message Screen by Brandon Hurlburt. Please wait while I see if I can find a quick answer to your question for {ownerDisplayName} to approve!";
+            string? communicationTwinSkillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+            return await copilotReplyDraftingService.DraftReplyAsync(
+                message,
+                profile,
+                communicationTwinSkillContent,
+                cancellationToken);
         }
     }
 }

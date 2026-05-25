@@ -10,11 +10,10 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $repoRoot
 
-$communicationTwinDirectory = Join-Path $repoRoot ".message-screener"
-$communicationTwinPath = Join-Path $communicationTwinDirectory "communication-twin.json"
-$skillsDirectory = Join-Path $communicationTwinDirectory "skills"
-$communicationTwinSkillPath = Join-Path $skillsDirectory "communication-twin.skill.md"
-$promptsDirectory = Join-Path $communicationTwinDirectory "prompts"
+$runtimeConfigDirectory = Join-Path $repoRoot "src/MessageScreener.Api/config"
+$communicationTwinPath = Join-Path $runtimeConfigDirectory "communication-twin.json"
+$communicationTwinSkillPath = Join-Path $runtimeConfigDirectory "communication-twin.skill.md"
+$promptsDirectory = Join-Path $repoRoot ".github/prompts"
 $promptPath = Join-Path $promptsDirectory "communication-twin.workiq.prompt.md"
 
 function Resolve-CopilotCliCommand {
@@ -116,12 +115,8 @@ function Resolve-CopilotCliCommand {
     return $null
 }
 
-if (-not (Test-Path $communicationTwinDirectory)) {
-    New-Item -Path $communicationTwinDirectory -ItemType Directory | Out-Null
-}
-
-if (-not (Test-Path $skillsDirectory)) {
-    New-Item -Path $skillsDirectory -ItemType Directory | Out-Null
+if (-not (Test-Path $runtimeConfigDirectory)) {
+    New-Item -Path $runtimeConfigDirectory -ItemType Directory | Out-Null
 }
 
 if (-not (Test-Path $promptsDirectory)) {
@@ -247,4 +242,5 @@ Set-Content -Path $communicationTwinSkillPath -Value $skillBody -Encoding utf8
 
 Write-Host "Communication twin JSON created at: $communicationTwinPath"
 Write-Host "Communication twin skill created at: $communicationTwinSkillPath"
+Write-Host "These files are deployment-shipped runtime artifacts in a well-known path under src/MessageScreener.Api/config."
 Write-Host "Next step: dotnet build MessageScreener.slnx -warnaserror"

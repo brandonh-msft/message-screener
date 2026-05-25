@@ -1,0 +1,36 @@
+{
+  "servers": {
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
+      }
+    },
+    "workiq": {
+      "command": "copilot",
+      "args": [
+        "mcp",
+        "serve",
+        "workiq"
+      ]
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
+    },
+    "microsoft-learn": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@microsoft/microsoft-learn-mcp"
+      ]
+    }
+  }
+}

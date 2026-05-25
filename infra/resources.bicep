@@ -13,6 +13,16 @@ param teamsAppId string = ''
 @description('Optional personal screener conversation ID used as the primary review-delivery target.')
 param personalReviewConversationId string = ''
 
+@secure()
+@description('Optional GitHub token used by GitHub Copilot SDK runtime sessions in deployed container environments.')
+param githubCopilotToken string = ''
+
+@description('Optional GitHub Copilot model override for runtime reply drafting sessions.')
+param copilotModel string = ''
+
+@description('Optional GitHub Copilot agent override for runtime reply drafting sessions.')
+param copilotAgent string = 'message-screener-researcher'
+
 
 param messagescreenerApiExists bool
 
@@ -114,6 +124,42 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
           {
             name: 'MessageScreener__Teams__PersonalReviewConversationId'
             value: personalReviewConversationId
+          }
+          {
+            name: 'MessageScreener__Copilot__GitHubToken'
+            value: githubCopilotToken
+          }
+          {
+            name: 'MessageScreener__Copilot__Model'
+            value: copilotModel
+          }
+          {
+            name: 'MessageScreener__Copilot__Agent'
+            value: copilotAgent
+          }
+          {
+            name: 'MessageScreener__Copilot__ConfigDirectory'
+            value: '.'
+          }
+          {
+            name: 'MessageScreener__Copilot__EnableConfigDiscovery'
+            value: 'true'
+          }
+          {
+            name: 'MessageScreener__Copilot__SystemPromptPath'
+            value: 'config/copilot-reply.system.prompt.md'
+          }
+          {
+            name: 'MessageScreener__Copilot__SkillDirectories__0'
+            value: '.github/skills'
+          }
+          {
+            name: 'MessageScreener__Copilot__SkillDirectories__1'
+            value: 'config/skills'
+          }
+          {
+            name: 'MessageScreener__Copilot__MessageMode'
+            value: 'interactive'
           }
           {
             name: 'PORT'

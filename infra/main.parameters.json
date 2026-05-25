@@ -16,6 +16,15 @@
       },
       "personalReviewConversationId": {
         "value": "${MESSAGE_SCREENER_PERSONAL_REVIEW_CONVERSATION_ID=}"
+      },
+      "githubCopilotToken": {
+        "value": "${MESSAGE_SCREENER_GITHUB_TOKEN=}"
+      },
+      "copilotModel": {
+        "value": "${MESSAGE_SCREENER_COPILOT_MODEL=}"
+      },
+      "copilotAgent": {
+        "value": "${MESSAGE_SCREENER_COPILOT_AGENT=message-screener-researcher}"
       }
     }
 }

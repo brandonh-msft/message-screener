@@ -21,5 +21,17 @@ namespace MessageScreener.Orchestration
             Level = LogLevel.Warning,
             Message = "Communication twin skill file was not found at {Path}.")]
         public static partial void CommunicationTwinSkillMissing(ILogger logger, string path);
+
+        [LoggerMessage(
+            EventId = 1023,
+            Level = LogLevel.Warning,
+            Message = "Copilot reply drafting returned empty content. Falling back to template reply.")]
+        public static partial void ReplyDraftEmpty(ILogger logger);
+
+        [LoggerMessage(
+            EventId = 1024,
+            Level = LogLevel.Warning,
+            Message = "Copilot reply drafting failed. Falling back to template reply. Error={Error}")]
+        public static partial void ReplyDraftFailed(ILogger logger, string error);
     }
 }

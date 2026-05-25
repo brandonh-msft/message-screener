@@ -27,6 +27,9 @@ builder.Services
     .AddOptions<MessageScreenerAgentOptions>()
     .BindConfiguration(MessageScreenerAgentOptions.SectionName);
 builder.Services
+    .AddOptions<MessageScreenerCopilotOptions>()
+    .BindConfiguration(MessageScreenerCopilotOptions.SectionName);
+builder.Services
     .AddOptions<MessageScreenerTeamsOptions>()
     .BindConfiguration(MessageScreenerTeamsOptions.SectionName);
 builder.Services
@@ -37,6 +40,7 @@ builder.Services.AddSingleton<IForwardAuditStore, InMemoryForwardAuditStore>();
 builder.Services.AddSingleton<ITriggerPolicy, TeamsTriggerPolicy>();
 builder.Services.AddScoped<IMessageIntakeService, MessageIntakeService>();
 builder.Services.AddSingleton<ICommunicationTwinService, CommunicationTwinService>();
+builder.Services.AddSingleton<ICopilotReplyDraftingService, CopilotReplyDraftingService>();
 builder.Services.AddSingleton<ICallerAutoResponseComposer, CallerAutoResponseComposer>();
 builder.Services.AddSingleton<IGhcpAgentHarness, GhcpAgentHarness>();
 builder.Services.AddSingleton<IPersonalReviewConversationRegistry, InMemoryPersonalReviewConversationRegistry>();
@@ -303,7 +307,10 @@ static async ValueTask<InboundProcessingOutcome> ProcessInboundMessageAsync(
         if (intakeResult.Accepted && intakeResult.Trigger.ShouldCreateReview)
         {
             CommunicationTwinProfile twinProfile = communicationTwinService.GetInitialProfile();
-            var pendingApprovalReply = callerAutoResponseComposer.ComposePendingApprovalReply(twinProfile.OwnerDisplayName);
+            var pendingApprovalReply = await callerAutoResponseComposer.ComposePendingApprovalReplyAsync(
+                message,
+                twinProfile,
+                cancellationToken);
 
             deliveryResult = await reviewDeliveryService.SendPendingApprovalReplyAsync(message, pendingApprovalReply, cancellationToken);
         }

@@ -15,6 +15,16 @@ param teamsAppId string = ''
 @description('Optional personal screener conversation ID used as the primary review-delivery target.')
 param personalReviewConversationId string = ''
 
+@secure()
+@description('Optional GitHub token used by GitHub Copilot SDK runtime sessions in deployed container environments.')
+param githubCopilotToken string = ''
+
+@description('Optional GitHub Copilot model override for runtime reply drafting sessions.')
+param copilotModel string = ''
+
+@description('Optional GitHub Copilot agent override for runtime reply drafting sessions.')
+param copilotAgent string = 'message-screener-researcher'
+
 
 param messagescreenerApiExists bool
 
@@ -44,6 +54,9 @@ module resources 'resources.bicep' = {
     messagescreenerApiExists: messagescreenerApiExists
     teamsAppId: teamsAppId
     personalReviewConversationId: personalReviewConversationId
+    githubCopilotToken: githubCopilotToken
+    copilotModel: copilotModel
+    copilotAgent: copilotAgent
   }
 }
 output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = resources.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_NAME

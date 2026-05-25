@@ -15,9 +15,9 @@ namespace MessageScreener.Orchestration
 
         public string Tone { get; init; } = "professional";
 
-        public string CommunicationTwinPath { get; init; } = ".message-screener/communication-twin.json";
+        public string CommunicationTwinPath { get; init; } = "config/communication-twin.json";
 
-        public string CommunicationTwinSkillPath { get; init; } = ".message-screener/skills/communication-twin.skill.md";
+        public string CommunicationTwinSkillPath { get; init; } = "config/communication-twin.skill.md";
     }
 
     public interface ICommunicationTwinService
