@@ -8,13 +8,19 @@ services:
         project: src/MessageScreener.Api
         host: containerapp
         language: dotnet
+        hooks:
+            postdeploy:
+                shell: pwsh
+                run: >-
+                    if (Test-Path ../../scripts/azd-generate-teams-manifest.ps1) {
+                      ../../scripts/azd-generate-teams-manifest.ps1
+                    } elseif (Test-Path ./scripts/azd-generate-teams-manifest.ps1) {
+                      ./scripts/azd-generate-teams-manifest.ps1
+                    } else {
+                      throw 'Could not locate scripts/azd-generate-teams-manifest.ps1 from current working directory.'
+                    }
+                continueOnError: false
 resources:
     messagescreener-api:
         type: host.containerapp
         port: 8080
-
-hooks:
-    postdeploy:
-        shell: pwsh
-        run: ./scripts/azd-generate-teams-manifest.ps1
-        continueOnError: false

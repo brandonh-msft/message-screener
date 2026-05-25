@@ -27,7 +27,7 @@ function New-TeamsManifest {
     }
 
     $manifest = [ordered]@{
-        '`$schema' = 'https://developer.microsoft.com/json-schemas/teams/v1.20/MicrosoftTeams.schema.json'
+        '$schema' = 'https://developer.microsoft.com/json-schemas/teams/v1.20/MicrosoftTeams.schema.json'
         manifestVersion = '1.20'
         version = '1.0.0'
         id = $TeamsAppId
@@ -147,29 +147,91 @@ function Get-FirstNonEmptyValue {
     return $null
 }
 
+function Get-AzdEnvValueMap {
+    $valueMap = @{}
+
+    $azdCommand = Get-Command azd -ErrorAction SilentlyContinue
+    if ($null -eq $azdCommand) {
+        return $valueMap
+    }
+
+    try {
+        $lines = azd env get-values 2>$null
+    }
+    catch {
+        return $valueMap
+    }
+
+    foreach ($line in $lines) {
+        if ([string]::IsNullOrWhiteSpace($line) -or -not $line.Contains('=')) {
+            continue
+        }
+
+        $parts = $line.Split('=', 2)
+        $name = $parts[0].Trim()
+        $rawValue = $parts[1].Trim()
+        if ([string]::IsNullOrWhiteSpace($name)) {
+            continue
+        }
+
+        if ($rawValue.StartsWith('"') -and $rawValue.EndsWith('"') -and $rawValue.Length -ge 2) {
+            $rawValue = $rawValue.Substring(1, $rawValue.Length - 2)
+        }
+
+        $valueMap[$name] = $rawValue
+    }
+
+    return $valueMap
+}
+
+function Get-FirstNonEmptyValueFromSources {
+    param(
+        [string[]]$CandidateNames,
+        [hashtable]$AzdEnvValues
+    )
+
+    $directValue = Get-FirstNonEmptyValue -CandidateNames $CandidateNames
+    if (-not [string]::IsNullOrWhiteSpace($directValue)) {
+        return $directValue
+    }
+
+    foreach ($candidateName in $CandidateNames) {
+        if ($AzdEnvValues.ContainsKey($candidateName)) {
+            $candidateValue = [string]$AzdEnvValues[$candidateName]
+            if (-not [string]::IsNullOrWhiteSpace($candidateValue)) {
+                return $candidateValue
+            }
+        }
+    }
+
+    return $null
+}
+
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$envName = Get-FirstNonEmptyValue -CandidateNames @('AZURE_ENV_NAME', 'AZD_ENV_NAME')
+$azdEnvValues = Get-AzdEnvValueMap
+
+$envName = Get-FirstNonEmptyValueFromSources -CandidateNames @('AZURE_ENV_NAME', 'AZD_ENV_NAME') -AzdEnvValues $azdEnvValues
 if ([string]::IsNullOrWhiteSpace($envName)) {
     $envName = 'local'
 }
 
-$baseUrl = Get-FirstNonEmptyValue -CandidateNames @(
+$baseUrl = Get-FirstNonEmptyValueFromSources -CandidateNames @(
     'MESSAGE_SCREENER_PUBLIC_BASE_URL',
     'MESSAGE_SCREENER_API_ENDPOINT',
     'SERVICE_MESSAGE_SCREENER_API_ENDPOINT',
     'SERVICE_API_ENDPOINT'
-)
+) -AzdEnvValues $azdEnvValues
 
-$teamsAppId = Get-FirstNonEmptyValue -CandidateNames @(
+$teamsAppId = Get-FirstNonEmptyValueFromSources -CandidateNames @(
     'MESSAGE_SCREENER_TEAMS_APP_ID',
     'TEAMS_APP_ID'
-)
+) -AzdEnvValues $azdEnvValues
 
-$botId = Get-FirstNonEmptyValue -CandidateNames @(
+$botId = Get-FirstNonEmptyValueFromSources -CandidateNames @(
     'MESSAGE_SCREENER_TEAMS_BOT_ID',
     'TEAMS_BOT_ID',
     'AZURE_CLIENT_ID'
-)
+) -AzdEnvValues $azdEnvValues
 
 if ([string]::IsNullOrWhiteSpace($baseUrl) -or [string]::IsNullOrWhiteSpace($teamsAppId) -or [string]::IsNullOrWhiteSpace($botId)) {
     Write-Host 'Skipping Teams manifest generation.'
@@ -177,7 +239,7 @@ if ([string]::IsNullOrWhiteSpace($baseUrl) -or [string]::IsNullOrWhiteSpace($tea
     exit 0
 }
 
-$outputDirectory = Join-Path $repoRoot ".message-screener/deploy/$envName"
+$outputDirectory = Join-Path $repoRoot "dist/$envName"
 $manifestPath = New-TeamsManifest `
     -OutputDirectory $outputDirectory `
     -BaseUrl $baseUrl `
@@ -195,4 +257,5 @@ $packagePath = New-TeamsAppPackage `
     -PackageName 'message-screener-teamsapp.zip'
 
 Write-Host "Teams manifest generation completed for azd environment '$envName'."
-Write-Host "Teams app package created at: $packagePath"
+Write-Host "Teams app package location: $packagePath"
+Write-Warning "Teams app package location: $packagePath"

@@ -148,16 +148,21 @@ resource botService 'Microsoft.BotService/botServices@2022-09-15' = {
     description: 'Bot registration for Message Screener Teams app.'
     endpoint: 'https://${messagescreenerApiResource.properties.configuration.ingress.fqdn}/api/messages'
     msaAppId: messagescreenerApiIdentity.outputs.clientId
+    msaAppTenantId: tenant().tenantId
     msaAppType: 'UserAssignedMSI'
     msaAppMSIResourceId: messagescreenerApiIdentity.outputs.resourceId
     isStreamingSupported: false
     publicNetworkAccess: 'Enabled'
   }
+  dependsOn: [
+    messagescreenerApi
+  ]
 }
 
 resource botTeamsChannel 'Microsoft.BotService/botServices/channels@2022-09-15' = {
   parent: botService
   name: 'MsTeamsChannel'
+  location: 'global'
   properties: {
     channelName: 'MsTeamsChannel'
   }
