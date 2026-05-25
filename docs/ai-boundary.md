@@ -20,10 +20,9 @@ These files are shipped with the service and used by the deployed product harnes
 
 - `src/MessageScreener.Api/config/`
 - `src/MessageScreener.Api/config/copilot-runtime/`
-- `src/MessageScreener.Api/config/mcp.config`
 - `src/MessageScreener.Api/config/.mcp.json`
 
-The repo-root `.mcp.json` is the developer seed for product MCP configuration and is copied into `src/MessageScreener.Api/config/mcp.config` and `src/MessageScreener.Api/config/.mcp.json` by `scripts/setup-copilot-runtime.ps1`.
+The repo-root `.mcp.json` is the developer seed for product MCP configuration and is copied into `src/MessageScreener.Api/config/.mcp.json` by `scripts/setup-copilot-runtime.ps1`.
 
 The developer seed and product runtime MCP files intentionally differ by environment token source:
 

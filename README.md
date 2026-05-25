@@ -39,9 +39,9 @@ Product runtime AI assets shipped with the deployed service live in:
 
 - `src/MessageScreener.Api/config/`
 - `src/MessageScreener.Api/config/copilot-runtime/`
-- `src/MessageScreener.Api/config/mcp.config`
+- `src/MessageScreener.Api/config/.mcp.json`
 
-The repo-root `.mcp.json` is the developer seed for runtime MCP configuration. `scripts/setup-copilot-runtime.ps1` copies it into `src/MessageScreener.Api/config/mcp.config` and `src/MessageScreener.Api/config/.mcp.json`.
+The repo-root `.mcp.json` is the developer seed for runtime MCP configuration. `scripts/setup-copilot-runtime.ps1` copies it into `src/MessageScreener.Api/config/.mcp.json`.
 
 `Message Screener` uses `GitHub.Copilot.SDK` at runtime to draft responses during screening. The deployed app only needs the runtime assets under `src/MessageScreener.Api/config/` and `src/MessageScreener.Api/config/copilot-runtime/`; the repo-level developer assets are not part of the product harness.
 
@@ -68,8 +68,7 @@ pwsh ./scripts/setup-copilot-runtime.ps1 -Force
 This hook:
 
 - validates the repo-root `.mcp.json` exists
-- writes `src/MessageScreener.Api/config/mcp.config` for runtime documentation/configuration
-- writes `src/MessageScreener.Api/config/.mcp.json` for runtime MCP discovery
+- writes `src/MessageScreener.Api/config/.mcp.json` for runtime MCP discovery and default GHCP behavior
 - ensures the runtime skill directory exists (`src/MessageScreener.Api/config/copilot-runtime/skills`)
 - writes `src/MessageScreener.Api/config/copilot.runtime.settings.sample.json`
 
@@ -227,14 +226,13 @@ Use these runtime files to tune deployed behavior:
 - Research-agent definition: `src/MessageScreener.Api/config/copilot-runtime/agents/message-screener-researcher.agent.md`
 - Research-agent prompting scaffold: `src/MessageScreener.Api/config/copilot-runtime/prompts/message-screener-reply.prompt.md`
 - Runtime system instructions: `src/MessageScreener.Api/config/copilot-reply.system.prompt.md`
-- Runtime communication persona: `src/MessageScreener.Api/config/communication-twin.json` and `src/MessageScreener.Api/config/communication-twin.skill.md`
 - Runtime communication persona: `src/MessageScreener.Api/config/communication-twin.json` and `src/MessageScreener.Api/config/copilot-runtime/skills/communication-twin/SKILL.md`
 - Setup-only twin generation prompt: `scripts/prompts/communication-twin.workiq.prompt.md` (not deployed runtime config)
 
 Use these MCP files intentionally by environment:
 
 - Developer seed config: `.mcp.json` (uses `${env:GITHUB_TOKEN}`)
-- Deployed runtime MCP configs: `src/MessageScreener.Api/config/mcp.config` and `src/MessageScreener.Api/config/.mcp.json` (use `${env:MESSAGE_SCREENER_GITHUB_TOKEN}`)
+- Deployed runtime MCP config: `src/MessageScreener.Api/config/.mcp.json` (uses `${env:MESSAGE_SCREENER_GITHUB_TOKEN}`)
 
 When you change MCP servers in `.mcp.json`, re-run `pwsh ./scripts/setup-copilot-runtime.ps1 -Force` so the runtime copies stay in sync.
 
