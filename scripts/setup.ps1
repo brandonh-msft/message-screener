@@ -1,6 +1,6 @@
 param(
     [string]$CopilotCliPath = "copilot",
-    [string]$CopilotModel,
+    [string]$CopilotModel = "gpt-5.5",
     [switch]$SkipCopilotRuntimeHook,
     [switch]$Force
 )
@@ -13,7 +13,7 @@ Set-Location $repoRoot
 
 $runtimeConfigDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config"
 $runtimeSkillDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config/skills/communication-twin"
-$communicationTwinPath = Join-Path $runtimeConfigDirectory "communication-twin.json"
+$communicationTwinPath = Join-Path $runtimeSkillDirectory "communication-twin.json"
 $communicationTwinSkillPath = Join-Path $runtimeSkillDirectory "SKILL.md"
 $promptPath = Join-Path $repoRoot "scripts/prompts/communication-twin.workiq.prompt.md"
 
@@ -134,21 +134,23 @@ if ((Test-Path $communicationTwinPath) -and -not $Force) {
     exit 0
 }
 
-$resolvedCopilotCli = Resolve-CopilotCliCommand -RequestedPath $CopilotCliPath
+$resolvedCopilotCli = "copilot" # Resolve-CopilotCliCommand -RequestedPath $CopilotCliPath
 if ([string]::IsNullOrWhiteSpace($resolvedCopilotCli)) {
     throw "No usable Copilot CLI command was found (checked '$CopilotCliPath' and 'copilot'). Re-run '.devcontainer/scripts/bootstrap-copilot-digital-twin.sh' and authenticate with 'gh auth login', then re-run setup."
 }
 
 Write-Host "Using Copilot CLI command: $resolvedCopilotCli"
-Write-Host "Generating communication twin via Copilot CLI + WorkIQ..."
+Write-Host "Generating communication twin via Copilot CLI + WorkIQ. This can take many minutes..."
 
 try {
     $promptText = Get-Content -Path $promptPath -Raw
 
     $copilotArgs = @(
         "--prompt", $promptText,
+        "--yolo", "--no-ask-user",
+        "--effort", "high",
         "--silent",
-        "--output-format", "text"
+        "--output-format", "json"
     )
 
     if (-not [string]::IsNullOrWhiteSpace($CopilotModel)) {
@@ -186,6 +188,8 @@ if (-not (Test-Path $communicationTwinPath)) {
 }
 
 $rawPersona = Get-Content -Path $communicationTwinPath -Raw
+Write-Debug "Raw persona JSON: $rawPersona"
+
 $persona = $rawPersona | ConvertFrom-Json -ErrorAction Stop
 
 if ([string]::IsNullOrWhiteSpace($persona.ownerDisplayName)) {
