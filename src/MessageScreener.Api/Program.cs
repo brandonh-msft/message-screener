@@ -12,7 +12,6 @@ using MessageScreener.Contracts;
 using MessageScreener.Orchestration;
 using MessageScreener.ReviewDelivery;
 using Microsoft.Extensions.Options;
-using Microsoft.Graph;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -41,22 +40,7 @@ builder.Services.AddSingleton<ICommunicationTwinService, CommunicationTwinServic
 builder.Services.AddSingleton<ICallerAutoResponseComposer, CallerAutoResponseComposer>();
 builder.Services.AddSingleton<IGhcpAgentHarness, GhcpAgentHarness>();
 builder.Services.AddSingleton<IPersonalReviewConversationRegistry, InMemoryPersonalReviewConversationRegistry>();
-builder.Services.AddSingleton(static serviceProvider =>
-{
-    MessageScreenerTeamsOptions options = serviceProvider
-        .GetRequiredService<IOptions<MessageScreenerTeamsOptions>>()
-        .Value;
-
-    var credentialOptions = new DefaultAzureCredentialOptions();
-    if (!string.IsNullOrWhiteSpace(options.ManagedIdentityClientId))
-    {
-        credentialOptions.ManagedIdentityClientId = options.ManagedIdentityClientId;
-    }
-
-    var credential = new DefaultAzureCredential(credentialOptions);
-    return new GraphServiceClient(credential, ["https://graph.microsoft.com/.default"]);
-});
-builder.Services.AddScoped<ITeamsMessageClient, TeamsGraphMessageClient>();
+builder.Services.AddScoped<ITeamsMessageClient, BotConnectorMessageClient>();
 builder.Services.AddScoped<IReviewDeliveryService, ReviewDeliveryService>();
 builder.Services.AddHttpClient();
 
@@ -250,9 +234,10 @@ app.MapPost("/api/messages", async (
     }
 
     if (string.Equals(conversationType, "personal", StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(conversationId))
+        !string.IsNullOrWhiteSpace(conversationId) &&
+        !string.IsNullOrWhiteSpace(serviceUrl))
     {
-        personalReviewConversationRegistry.Remember(conversationId);
+        personalReviewConversationRegistry.Remember(conversationId, serviceUrl);
     }
 
     string normalizedText = incomingText.Trim();

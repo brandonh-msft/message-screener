@@ -43,9 +43,17 @@ namespace MessageScreener.ReviewDelivery
             cancellationToken.ThrowIfCancellationRequested();
 
             string? targetConversationId = _options.PersonalReviewConversationId;
+            string? targetServiceUrl = _options.BotServiceUrl;
+
+            PersonalReviewConversationContext? remembered = _conversationRegistry.GetCurrent();
             if (string.IsNullOrWhiteSpace(targetConversationId))
             {
-                targetConversationId = _conversationRegistry.GetCurrent();
+                targetConversationId = remembered?.ConversationId;
+            }
+
+            if (string.IsNullOrWhiteSpace(targetServiceUrl))
+            {
+                targetServiceUrl = remembered?.ServiceUrl;
             }
 
             if (!_options.SendAutomaticCallerReply)
@@ -60,9 +68,16 @@ namespace MessageScreener.ReviewDelivery
                 return;
             }
 
+            if (string.IsNullOrWhiteSpace(targetServiceUrl))
+            {
+                ReviewDeliveryLog.CallerAutoReplySkipped(logger, targetConversationId, "missing_bot_service_url");
+                return;
+            }
+
             try
             {
                 await _teamsMessageClient.SendMessageAsync(
+                    targetServiceUrl,
                     targetConversationId,
                     pendingApprovalText,
                     cancellationToken);

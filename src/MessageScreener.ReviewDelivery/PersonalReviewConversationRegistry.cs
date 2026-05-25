@@ -4,27 +4,29 @@ namespace MessageScreener.ReviewDelivery;
 
 public interface IPersonalReviewConversationRegistry
 {
-    void Remember(string conversationId);
+    void Remember(string conversationId, string serviceUrl);
 
-    string? GetCurrent();
+    PersonalReviewConversationContext? GetCurrent();
 }
+
+public sealed record PersonalReviewConversationContext(string ConversationId, string ServiceUrl);
 
 public sealed class InMemoryPersonalReviewConversationRegistry : IPersonalReviewConversationRegistry
 {
-    private string? _currentConversationId;
+    private PersonalReviewConversationContext? _current;
 
-    public void Remember(string conversationId)
+    public void Remember(string conversationId, string serviceUrl)
     {
-        if (string.IsNullOrWhiteSpace(conversationId))
+        if (string.IsNullOrWhiteSpace(conversationId) || string.IsNullOrWhiteSpace(serviceUrl))
         {
             return;
         }
 
-        Interlocked.Exchange(ref _currentConversationId, conversationId);
+        Interlocked.Exchange(ref _current, new PersonalReviewConversationContext(conversationId, serviceUrl));
     }
 
-    public string? GetCurrent()
+    public PersonalReviewConversationContext? GetCurrent()
     {
-        return Volatile.Read(ref _currentConversationId);
+        return Volatile.Read(ref _current);
     }
 }

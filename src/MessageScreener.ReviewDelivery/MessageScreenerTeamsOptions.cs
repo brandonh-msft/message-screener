@@ -9,5 +9,7 @@ namespace MessageScreener.ReviewDelivery
         public string? ManagedIdentityClientId { get; init; }
 
         public string? PersonalReviewConversationId { get; init; }
+
+        public string? BotServiceUrl { get; init; }
     }
 }

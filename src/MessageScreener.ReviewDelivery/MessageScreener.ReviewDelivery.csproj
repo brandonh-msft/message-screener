@@ -2,8 +2,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.14.0" />
-    <PackageReference Include="Microsoft.Kiota.Abstractions" Version="2.0.0" />
-    <PackageReference Include="Microsoft.Graph" Version="5.95.0" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
   </ItemGroup>
