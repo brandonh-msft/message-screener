@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Azure.Core;
 using Azure.Identity;
+using MessageScreener.Audit;
 using MessageScreener.Api;
 using MessageScreener.Api.Logging;
 using MessageScreener.Contracts;
@@ -30,6 +31,7 @@ builder.Services
     .AddOptions<MessageScreenerTeamsOptions>()
     .BindConfiguration(MessageScreenerTeamsOptions.SectionName);
 builder.Services.AddSingleton<IInboundEventStore, InMemoryInboundEventStore>();
+builder.Services.AddSingleton<IForwardAuditStore, InMemoryForwardAuditStore>();
 builder.Services.AddSingleton<ITriggerPolicy, TeamsTriggerPolicy>();
 builder.Services.AddScoped<IMessageIntakeService, MessageIntakeService>();
 builder.Services.AddSingleton<ICommunicationTwinService, CommunicationTwinService>();
@@ -97,6 +99,7 @@ app.MapGet("/health", () => Results.Ok(new
 app.MapPost("/api/intake/forward", async (
     HttpRequest request,
     IMessageIntakeService intakeService,
+    IForwardAuditStore forwardAuditStore,
     ICommunicationTwinService communicationTwinService,
     ICallerAutoResponseComposer callerAutoResponseComposer,
     IReviewDeliveryService reviewDeliveryService,
@@ -121,6 +124,7 @@ app.MapPost("/api/intake/forward", async (
     MessageIntakeResult result = await ProcessInboundMessageAsync(
         forwardMessage,
         intakeService,
+        forwardAuditStore,
         communicationTwinService,
         callerAutoResponseComposer,
         reviewDeliveryService,
@@ -135,6 +139,7 @@ app.MapPost("/api/messages", async (
     IHttpClientFactory httpClientFactory,
     IOptions<MessageScreenerTeamsOptions> teamsOptions,
     IMessageIntakeService intakeService,
+    IForwardAuditStore forwardAuditStore,
     ICommunicationTwinService communicationTwinService,
     ICallerAutoResponseComposer callerAutoResponseComposer,
     IReviewDeliveryService reviewDeliveryService,
@@ -177,6 +182,7 @@ app.MapPost("/api/messages", async (
         MessageIntakeResult intakeResult = await ProcessInboundMessageAsync(
             forwardedMessage,
             intakeService,
+            forwardAuditStore,
             communicationTwinService,
             callerAutoResponseComposer,
             reviewDeliveryService,
@@ -243,6 +249,7 @@ app.Run();
 static async ValueTask<MessageIntakeResult> ProcessInboundMessageAsync(
     TeamsInboundMessage message,
     IMessageIntakeService intakeService,
+    IForwardAuditStore forwardAuditStore,
     ICommunicationTwinService communicationTwinService,
     ICallerAutoResponseComposer callerAutoResponseComposer,
     IReviewDeliveryService reviewDeliveryService,
@@ -269,14 +276,38 @@ static async ValueTask<MessageIntakeResult> ProcessInboundMessageAsync(
             await reviewDeliveryService.SendPendingApprovalReplyAsync(message, pendingApprovalReply, cancellationToken);
         }
 
+        await forwardAuditStore.AppendAsync(
+            CreateForwardAuditEntry(message, intakeResult),
+            cancellationToken);
+
         await intakeService.MarkCompletedAsync(intakeResult, cancellationToken);
         return intakeResult;
     }
     catch
     {
+        await forwardAuditStore.AppendAsync(
+            CreateForwardAuditEntry(message, intakeResult),
+            cancellationToken);
+
         await intakeService.ResetAsync(intakeResult, cancellationToken);
         throw;
     }
+}
+
+static ForwardAuditEntry CreateForwardAuditEntry(TeamsInboundMessage message, MessageIntakeResult intakeResult)
+{
+    return new ForwardAuditEntry(
+        AuditEventId: Guid.NewGuid().ToString("N"),
+        RecordedAtUtc: DateTimeOffset.UtcNow,
+        TenantId: message.TenantId,
+        SourceConversationId: message.ConversationId,
+        SourceMessageId: message.SourceMessageId,
+        SenderDisplayName: message.SenderDisplayName,
+        SenderIdentityKey: message.SenderIdentityKey,
+        SenderIdentityKeyKind: message.SenderIdentityKeyKind,
+        ProcessingState: intakeResult.ProcessingState,
+        IntakeReasonCode: intakeResult.ReasonCode,
+        ReviewRequested: intakeResult.Trigger.ShouldCreateReview);
 }
 
 static string? GetJsonString(JsonElement root, string propertyName)

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/MessageScreener.Api/MessageScreener.Api.csproj" />
+    <Project Path="src/MessageScreener.Audit/MessageScreener.Audit.csproj" />
     <Project Path="src/MessageScreener.Contracts/MessageScreener.Contracts.csproj" />
     <Project Path="src/MessageScreener.Orchestration/MessageScreener.Orchestration.csproj" />
     <Project Path="src/MessageScreener.ReviewDelivery/MessageScreener.ReviewDelivery.csproj" />
