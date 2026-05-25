@@ -18,6 +18,7 @@ using OpenTelemetry.Trace;
 
 const string ServiceName = "MessageScreener.Api";
 const string ServiceVersion = "0.1.0";
+const string ForwardMessageActionCommandId = "forwardToMessageScreener";
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -319,6 +320,39 @@ static string? GetJsonPathString(JsonElement root, params string[] path)
     return current.GetString();
 }
 
+static JsonElement? GetObjectProperty(JsonElement root, string propertyName)
+{
+    if (!root.TryGetProperty(propertyName, out JsonElement propertyValue) ||
+        propertyValue.ValueKind != JsonValueKind.Object)
+    {
+        return null;
+    }
+
+    return propertyValue;
+}
+
+static JsonElement? GetObjectPath(JsonElement root, params string[] path)
+{
+    JsonElement current = root;
+    foreach (string segment in path)
+    {
+        if (current.ValueKind != JsonValueKind.Object ||
+            !current.TryGetProperty(segment, out JsonElement next))
+        {
+            return null;
+        }
+
+        current = next;
+    }
+
+    if (current.ValueKind != JsonValueKind.Object)
+    {
+        return null;
+    }
+
+    return current;
+}
+
 static async ValueTask<string?> TrySendBotReplyAsync(
     IHttpClientFactory httpClientFactory,
     MessageScreenerTeamsOptions options,
@@ -386,17 +420,28 @@ static TeamsInboundMessage? TryParseForwardedMessageFromInvoke(JsonElement root)
         return null;
     }
 
-    if (!valueElement.TryGetProperty("messagePayload", out JsonElement messagePayload) ||
-        messagePayload.ValueKind != JsonValueKind.Object)
+    string? commandId = FirstNonEmpty(
+        GetJsonString(valueElement, "commandId"),
+        GetJsonPathString(valueElement, "data", "commandId"));
+
+    if (!string.Equals(commandId, ForwardMessageActionCommandId, StringComparison.OrdinalIgnoreCase))
+    {
+        return null;
+    }
+
+    JsonElement? messagePayload = GetObjectProperty(valueElement, "messagePayload") ??
+        GetObjectPath(valueElement, "data", "messagePayload");
+
+    if (messagePayload is null)
     {
         return null;
     }
 
     string? conversationId = FirstNonEmpty(
-        GetNestedJsonString(messagePayload, "conversation", "id"),
+        GetNestedJsonString(messagePayload.Value, "conversation", "id"),
         GetNestedJsonString(root, "conversation", "id"));
 
-    string? messageId = GetJsonString(messagePayload, "id");
+    string? messageId = GetJsonString(messagePayload.Value, "id");
 
     if (string.IsNullOrWhiteSpace(conversationId) || string.IsNullOrWhiteSpace(messageId))
     {
@@ -404,11 +449,11 @@ static TeamsInboundMessage? TryParseForwardedMessageFromInvoke(JsonElement root)
     }
 
     string senderAadObjectId = FirstNonEmpty(
-        GetJsonPathString(messagePayload, "from", "user", "id"),
-        GetNestedJsonString(messagePayload, "from", "id"),
+        GetJsonPathString(messagePayload.Value, "from", "user", "id"),
+        GetNestedJsonString(messagePayload.Value, "from", "id"),
         string.Empty) ?? string.Empty;
 
-    string bodyText = StripHtml(GetNestedJsonString(messagePayload, "body", "content"));
+    string bodyText = StripHtml(GetNestedJsonString(messagePayload.Value, "body", "content"));
     string tenantId = FirstNonEmpty(
         GetJsonPathString(root, "channelData", "tenant", "id"),
         GetNestedJsonString(root, "conversation", "tenantId"),
