@@ -40,6 +40,7 @@ builder.Services.AddScoped<IMessageIntakeService, MessageIntakeService>();
 builder.Services.AddSingleton<ICommunicationTwinService, CommunicationTwinService>();
 builder.Services.AddSingleton<ICallerAutoResponseComposer, CallerAutoResponseComposer>();
 builder.Services.AddSingleton<IGhcpAgentHarness, GhcpAgentHarness>();
+builder.Services.AddSingleton<IPersonalReviewConversationRegistry, InMemoryPersonalReviewConversationRegistry>();
 builder.Services.AddSingleton(static serviceProvider =>
 {
     MessageScreenerTeamsOptions options = serviceProvider
@@ -172,6 +173,7 @@ app.MapPost("/api/messages", async (
     IOptions<MessageScreenerTeamsOptions> teamsOptions,
     IMessageIntakeService intakeService,
     IForwardAuditStore forwardAuditStore,
+    IPersonalReviewConversationRegistry personalReviewConversationRegistry,
     ICommunicationTwinService communicationTwinService,
     ICallerAutoResponseComposer callerAutoResponseComposer,
     IReviewDeliveryService reviewDeliveryService,
@@ -190,6 +192,7 @@ app.MapPost("/api/messages", async (
     string? invokeName = GetJsonString(root, "name");
     string? serviceUrl = GetJsonString(root, "serviceUrl");
     string? conversationId = GetNestedJsonString(root, "conversation", "id");
+    string? conversationType = GetNestedJsonString(root, "conversation", "conversationType");
     string? fromId = GetNestedJsonString(root, "from", "id");
     string? recipientId = GetNestedJsonString(root, "recipient", "id");
 
@@ -234,6 +237,12 @@ app.MapPost("/api/messages", async (
         string.IsNullOrWhiteSpace(incomingText))
     {
         return Results.Ok();
+    }
+
+    if (string.Equals(conversationType, "personal", StringComparison.OrdinalIgnoreCase) &&
+        !string.IsNullOrWhiteSpace(conversationId))
+    {
+        personalReviewConversationRegistry.Remember(conversationId);
     }
 
     string normalizedText = incomingText.Trim();

@@ -16,13 +16,16 @@ namespace MessageScreener.ReviewDelivery
     {
         private readonly ITeamsMessageClient _teamsMessageClient = null!;
         private readonly MessageScreenerTeamsOptions _options = null!;
+        private readonly IPersonalReviewConversationRegistry _conversationRegistry = null!;
 
         public ReviewDeliveryService(
             ITeamsMessageClient teamsMessageClient,
+            IPersonalReviewConversationRegistry conversationRegistry,
             IOptions<MessageScreenerTeamsOptions> options,
             ILogger<ReviewDeliveryService> logger) : this(logger)
         {
             _teamsMessageClient = teamsMessageClient;
+            _conversationRegistry = conversationRegistry;
             _options = options.Value;
         }
 
@@ -40,6 +43,10 @@ namespace MessageScreener.ReviewDelivery
             cancellationToken.ThrowIfCancellationRequested();
 
             string? targetConversationId = _options.PersonalReviewConversationId;
+            if (string.IsNullOrWhiteSpace(targetConversationId))
+            {
+                targetConversationId = _conversationRegistry.GetCurrent();
+            }
 
             if (!_options.SendAutomaticCallerReply)
             {
