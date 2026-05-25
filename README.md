@@ -146,6 +146,10 @@ Expected azd environment values:
 - `MESSAGE_SCREENER_TEAMS_APP_ID`
 - `MESSAGE_SCREENER_TEAMS_BOT_ID`
 
+Runtime review delivery also requires a personal screener destination conversation ID:
+
+- `MessageScreener__Teams__PersonalReviewConversationId`
+
 `MESSAGE_SCREENER_TEAMS_BOT_ID` is produced by infra deployment from the managed identity client ID and does not need to be set manually.
 
 If those values are missing, the hook logs a skip message and deployment continues safely.

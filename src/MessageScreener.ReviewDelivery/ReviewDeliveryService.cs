@@ -39,26 +39,28 @@ namespace MessageScreener.ReviewDelivery
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            string? targetConversationId = _options.PersonalReviewConversationId;
+
             if (!_options.SendAutomaticCallerReply)
             {
-                ReviewDeliveryLog.CallerAutoReplySkipped(logger, message.ConversationId, "auto_reply_disabled");
+                ReviewDeliveryLog.CallerAutoReplySkipped(logger, targetConversationId ?? string.Empty, "auto_reply_disabled");
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(message.ConversationId))
+            if (string.IsNullOrWhiteSpace(targetConversationId))
             {
-                ReviewDeliveryLog.CallerAutoReplySkipped(logger, message.ConversationId, "missing_conversation_id");
+                ReviewDeliveryLog.CallerAutoReplySkipped(logger, message.ConversationId, "missing_personal_review_conversation_id");
                 return;
             }
 
             await _teamsMessageClient.SendMessageAsync(
-                message.ConversationId,
+                targetConversationId,
                 pendingApprovalText,
                 cancellationToken);
 
             ReviewDeliveryLog.CallerAutoReplyPrepared(
                 logger,
-                message.ConversationId,
+                targetConversationId,
                 message.EventId,
                 pendingApprovalText);
         }

@@ -7,5 +7,7 @@ namespace MessageScreener.ReviewDelivery
         public bool SendAutomaticCallerReply { get; init; } = true;
 
         public string? ManagedIdentityClientId { get; init; }
+
+        public string? PersonalReviewConversationId { get; init; }
     }
 }
