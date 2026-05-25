@@ -177,10 +177,12 @@ app.MapPost("/api/messages", async (
             reviewDeliveryService,
             logger,
             cancellationToken);
-
-        string statusText = intakeResult.Duplicate
-            ? "Message was already forwarded to Message Screener."
-            : "Message forwarded to Message Screener.";
+        string statusText = intakeResult.ProcessingState switch
+        {
+            MessageProcessingState.DuplicateInFlight => "Message is already being processed by Message Screener.",
+            MessageProcessingState.DuplicateCompleted => "Message was already forwarded to Message Screener.",
+            _ => "Message forwarded to Message Screener.",
+        };
 
         return Results.Ok(new
         {
@@ -259,15 +261,24 @@ static async ValueTask<MessageIntakeResult> ProcessInboundMessageAsync(
         intakeResult.ReasonCode,
         intakeResult.Trigger.ReasonCode);
 
-    if (intakeResult.Accepted && intakeResult.Trigger.ShouldCreateReview)
+    try
     {
-        CommunicationTwinProfile twinProfile = communicationTwinService.GetInitialProfile();
-        var pendingApprovalReply = callerAutoResponseComposer.ComposePendingApprovalReply(twinProfile.OwnerDisplayName);
+        if (intakeResult.Accepted && intakeResult.Trigger.ShouldCreateReview)
+        {
+            CommunicationTwinProfile twinProfile = communicationTwinService.GetInitialProfile();
+            var pendingApprovalReply = callerAutoResponseComposer.ComposePendingApprovalReply(twinProfile.OwnerDisplayName);
 
-        await reviewDeliveryService.SendPendingApprovalReplyAsync(message, pendingApprovalReply, cancellationToken);
+            await reviewDeliveryService.SendPendingApprovalReplyAsync(message, pendingApprovalReply, cancellationToken);
+        }
+
+        await intakeService.MarkCompletedAsync(intakeResult, cancellationToken);
+        return intakeResult;
     }
-
-    return intakeResult;
+    catch
+    {
+        await intakeService.ResetAsync(intakeResult, cancellationToken);
+        throw;
+    }
 }
 
 static string? GetJsonString(JsonElement root, string propertyName)

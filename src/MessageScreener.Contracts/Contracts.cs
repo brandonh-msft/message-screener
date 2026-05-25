@@ -30,11 +30,21 @@ namespace MessageScreener.Contracts
         bool ShouldCreateReview,
         string ReasonCode);
 
+    public enum MessageProcessingState
+    {
+        Accepted = 0,
+        DuplicateInFlight = 1,
+        DuplicateCompleted = 2,
+    }
+
     public sealed record MessageIntakeResult(
         bool Accepted,
         bool Duplicate,
         string ReasonCode,
-        TriggerEvaluationResult Trigger);
+        TriggerEvaluationResult Trigger,
+        string DeduplicationKey,
+        MessageProcessingState ProcessingState,
+        bool CanRequeue);
 
     public sealed record CommunicationTwinProfile(
         string OwnerDisplayName,
