@@ -103,6 +103,8 @@ pwsh ./scripts/azd-generate-teams-manifest.ps1
 
 This single script resolves azd environment values and generates the Teams manifest directly.
 
+The generated manifest includes a Teams message action command (`Forward to Message Screener`) so users can invoke screening from message Actions in 1:1 and group chats.
+
 ### Provisioned v1 Infrastructure
 
 `infra/main.bicep` provisions the baseline required for v1:

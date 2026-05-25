@@ -69,6 +69,22 @@ function New-TeamsManifest {
                 )
             }
         )
+        composeExtensions = @(
+            [ordered]@{
+                botId = $BotId
+                canUpdateConfiguration = $false
+                commands = @(
+                    [ordered]@{
+                        id = 'forwardToMessageScreener'
+                        type = 'action'
+                        title = 'Forward to Message Screener'
+                        description = 'Forward this message to Message Screener for review and draft generation.'
+                        context = @('message')
+                        fetchTask = $false
+                    }
+                )
+            }
+        )
         validDomains = @(
             ([Uri]$trimmedBaseUrl).Host
         )

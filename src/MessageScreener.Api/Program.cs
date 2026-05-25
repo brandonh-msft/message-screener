@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Azure.Core;
 using Azure.Identity;
 using MessageScreener.Api;
@@ -130,6 +131,10 @@ app.MapPost("/api/messages", async (
     HttpRequest request,
     IHttpClientFactory httpClientFactory,
     IOptions<MessageScreenerTeamsOptions> teamsOptions,
+    IMessageIntakeService intakeService,
+    ICommunicationTwinService communicationTwinService,
+    ICallerAutoResponseComposer callerAutoResponseComposer,
+    IReviewDeliveryService reviewDeliveryService,
     ILoggerFactory loggerFactory,
     CancellationToken cancellationToken) =>
 {
@@ -142,6 +147,7 @@ app.MapPost("/api/messages", async (
     string? activityType = GetJsonString(root, "type");
     string? activityId = GetJsonString(root, "id");
     string? incomingText = GetJsonString(root, "text");
+    string? invokeName = GetJsonString(root, "name");
     string? serviceUrl = GetJsonString(root, "serviceUrl");
     string? conversationId = GetNestedJsonString(root, "conversation", "id");
     string? fromId = GetNestedJsonString(root, "from", "id");
@@ -152,6 +158,38 @@ app.MapPost("/api/messages", async (
         activityType ?? "unknown",
         activityId ?? "unknown",
         !string.IsNullOrWhiteSpace(incomingText));
+
+    if (string.Equals(activityType, "invoke", StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(invokeName, "composeExtension/submitAction", StringComparison.OrdinalIgnoreCase))
+    {
+        TeamsInboundMessage? forwardedMessage = TryParseForwardedMessageFromInvoke(root);
+        if (forwardedMessage is null)
+        {
+            return Results.BadRequest();
+        }
+
+        MessageIntakeResult intakeResult = await ProcessInboundMessageAsync(
+            forwardedMessage,
+            intakeService,
+            communicationTwinService,
+            callerAutoResponseComposer,
+            reviewDeliveryService,
+            logger,
+            cancellationToken);
+
+        string statusText = intakeResult.Duplicate
+            ? "Message was already forwarded to Message Screener."
+            : "Message forwarded to Message Screener.";
+
+        return Results.Ok(new
+        {
+            composeExtension = new
+            {
+                type = "message",
+                text = statusText,
+            }
+        });
+    }
 
     if (!string.Equals(activityType, "message", StringComparison.OrdinalIgnoreCase) ||
         string.IsNullOrWhiteSpace(incomingText))
@@ -259,6 +297,28 @@ static string? GetNestedJsonString(JsonElement root, string parentPropertyName, 
     return childValue.GetString();
 }
 
+static string? GetJsonPathString(JsonElement root, params string[] path)
+{
+    JsonElement current = root;
+    foreach (string segment in path)
+    {
+        if (current.ValueKind != JsonValueKind.Object ||
+            !current.TryGetProperty(segment, out JsonElement next))
+        {
+            return null;
+        }
+
+        current = next;
+    }
+
+    if (current.ValueKind != JsonValueKind.String)
+    {
+        return null;
+    }
+
+    return current.GetString();
+}
+
 static async ValueTask<string?> TrySendBotReplyAsync(
     IHttpClientFactory httpClientFactory,
     MessageScreenerTeamsOptions options,
@@ -316,4 +376,81 @@ static async ValueTask<string?> TrySendBotReplyAsync(
 
     string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
     return $"connector_send_failed: {(int)response.StatusCode} {response.ReasonPhrase}; body={responseBody}";
+}
+
+static TeamsInboundMessage? TryParseForwardedMessageFromInvoke(JsonElement root)
+{
+    if (!root.TryGetProperty("value", out JsonElement valueElement) ||
+        valueElement.ValueKind != JsonValueKind.Object)
+    {
+        return null;
+    }
+
+    if (!valueElement.TryGetProperty("messagePayload", out JsonElement messagePayload) ||
+        messagePayload.ValueKind != JsonValueKind.Object)
+    {
+        return null;
+    }
+
+    string? conversationId = FirstNonEmpty(
+        GetNestedJsonString(messagePayload, "conversation", "id"),
+        GetNestedJsonString(root, "conversation", "id"));
+
+    string? messageId = GetJsonString(messagePayload, "id");
+
+    if (string.IsNullOrWhiteSpace(conversationId) || string.IsNullOrWhiteSpace(messageId))
+    {
+        return null;
+    }
+
+    string senderAadObjectId = FirstNonEmpty(
+        GetJsonPathString(messagePayload, "from", "user", "id"),
+        GetNestedJsonString(messagePayload, "from", "id"),
+        string.Empty) ?? string.Empty;
+
+    string bodyText = StripHtml(GetNestedJsonString(messagePayload, "body", "content"));
+    string tenantId = FirstNonEmpty(
+        GetJsonPathString(root, "channelData", "tenant", "id"),
+        GetNestedJsonString(root, "conversation", "tenantId"),
+        string.Empty) ?? string.Empty;
+
+    bool isOneOnOne = string.Equals(
+        GetNestedJsonString(root, "conversation", "conversationType"),
+        "personal",
+        StringComparison.OrdinalIgnoreCase);
+
+    ConversationScope scope = isOneOnOne ? ConversationScope.OneOnOne : ConversationScope.GroupChat;
+
+    return new TeamsInboundMessage(
+        EventId: $"teams-action:{conversationId}:{messageId}",
+        TenantId: tenantId,
+        ConversationId: conversationId,
+        SenderAadObjectId: senderAadObjectId,
+        BodyPlainText: bodyText,
+        Scope: scope,
+        IsAtMention: true,
+        OccurredAtUtc: DateTimeOffset.UtcNow);
+}
+
+static string StripHtml(string? content)
+{
+    if (string.IsNullOrWhiteSpace(content))
+    {
+        return string.Empty;
+    }
+
+    return Regex.Replace(content, "<.*?>", string.Empty).Trim();
+}
+
+static string? FirstNonEmpty(params string?[] values)
+{
+    foreach (string? value in values)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+    }
+
+    return null;
 }
