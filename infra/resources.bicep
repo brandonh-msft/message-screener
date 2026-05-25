@@ -10,6 +10,9 @@ param tags object = {}
 @description('Optional Teams app ID used by manifest generation outputs.')
 param teamsAppId string = ''
 
+@description('Optional personal screener conversation ID used as the primary review-delivery target.')
+param personalReviewConversationId string = ''
+
 
 param messagescreenerApiExists bool
 
@@ -107,6 +110,10 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
           {
             name: 'MessageScreener__Teams__ManagedIdentityClientId'
             value: messagescreenerApiIdentity.outputs.clientId
+          }
+          {
+            name: 'MessageScreener__Teams__PersonalReviewConversationId'
+            value: personalReviewConversationId
           }
           {
             name: 'PORT'

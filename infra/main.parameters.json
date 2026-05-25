@@ -13,6 +13,9 @@
       },
       "teamsAppId": {
         "value": "${MESSAGE_SCREENER_TEAMS_APP_ID=}"
+      },
+      "personalReviewConversationId": {
+        "value": "${MESSAGE_SCREENER_PERSONAL_REVIEW_CONVERSATION_ID=}"
       }
     }
 }

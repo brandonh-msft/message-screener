@@ -12,6 +12,9 @@ param location string
 @description('Optional Teams app ID used when generating Teams manifest output values.')
 param teamsAppId string = ''
 
+@description('Optional personal screener conversation ID used as the primary review-delivery target.')
+param personalReviewConversationId string = ''
+
 
 param messagescreenerApiExists bool
 
@@ -40,6 +43,7 @@ module resources 'resources.bicep' = {
     tags: tags
     messagescreenerApiExists: messagescreenerApiExists
     teamsAppId: teamsAppId
+    personalReviewConversationId: personalReviewConversationId
   }
 }
 output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = resources.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_NAME

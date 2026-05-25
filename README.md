@@ -126,15 +126,16 @@ Set these before running `azd up`:
 
 ```powershell
 azd env set AZURE_LOCATION eastus
-azd env set MESSAGE_SCREENER_TEAMS_APP_ID <teams-app-manifest-id>
 ```
+
+`MESSAGE_SCREENER_TEAMS_APP_ID` is optional. If omitted, infra generates a deterministic Teams app ID for the manifest package.
 
 When required environment values are present, the hook generates:
 
-- `.message-screener/deploy/<env>/teamsapp/manifest.json`
-- `.message-screener/deploy/<env>/message-screener-teamsapp.zip`
+- `dist/<env>/teamsapp/manifest.json`
+- `dist/<env>/message-screener-teamsapp.zip`
 
-The zip package is ready for Teams app upload and contains:
+After `azd up`, import the generated zip package into Teams for testing:
 
 - `manifest.json`
 - `color.png`
@@ -149,6 +150,15 @@ Expected azd environment values:
 Runtime review delivery also requires a personal screener destination conversation ID:
 
 - `MessageScreener__Teams__PersonalReviewConversationId`
+
+For first-run testing, you do not need to set this before `azd up`. After importing the app, open the Message Screener personal chat and send `help` once. The service learns that personal conversation at runtime and uses it as the review destination.
+
+If you want the destination to persist across restarts or redeployments, set it explicitly and redeploy:
+
+```powershell
+azd env set MESSAGE_SCREENER_PERSONAL_REVIEW_CONVERSATION_ID <teams-personal-chat-id>
+azd deploy
+```
 
 Optional owner-scoped audit reads can be enabled with:
 
