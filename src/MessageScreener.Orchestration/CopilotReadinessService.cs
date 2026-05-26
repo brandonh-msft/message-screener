@@ -1,4 +1,3 @@
-using System.Text.Json;
 using MessageScreener.Contracts;
 using Microsoft.Extensions.Options;
 
@@ -17,7 +16,6 @@ public interface ICopilotReadinessService
 }
 
 public sealed class CopilotReadinessService(
-    IOptions<MessageScreenerAgentOptions> agentOptions,
     IOptions<MessageScreenerCopilotOptions> copilotOptions,
     ICommunicationTwinService communicationTwinService,
     IGhcpAgentHarness ghcpAgentHarness,
@@ -29,7 +27,7 @@ public sealed class CopilotReadinessService(
 
         List<CopilotReadinessCheck> checks = [];
 
-        checks.Add(EvaluatePersonaFileCheck(agentOptions.Value));
+        checks.Add(await EvaluateCommunicationTwinSkillCheckAsync(cancellationToken));
         checks.Add(EvaluateTokenCheck(copilotOptions.Value));
 
         IReadOnlyList<McpServerRegistration> mcpServers = await ghcpAgentHarness.GetMcpServersAsync(cancellationToken);
@@ -81,34 +79,23 @@ public sealed class CopilotReadinessService(
             Checks: checks);
     }
 
-    private static CopilotReadinessCheck EvaluatePersonaFileCheck(MessageScreenerAgentOptions options)
+    private async ValueTask<CopilotReadinessCheck> EvaluateCommunicationTwinSkillCheckAsync(CancellationToken cancellationToken)
     {
-        string twinPath = ResolvePath(options.CommunicationTwinPath);
-        if (!File.Exists(twinPath))
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string? skillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(skillContent))
         {
             return new CopilotReadinessCheck(
-                Name: "persona_file_non_default",
+                Name: "communication_twin_skill_loaded",
                 Passed: false,
-                Detail: $"missing:{twinPath}");
+                Detail: "missing_skill");
         }
 
-        string json = File.ReadAllText(twinPath);
-        using JsonDocument document = JsonDocument.Parse(json);
-        JsonElement root = document.RootElement;
-
-        string? ownerDisplayName = GetString(root, "ownerDisplayName");
-        string? personaSummary = GetString(root, "personaSummary");
-
-        bool isNonDefaultOwner = !string.IsNullOrWhiteSpace(ownerDisplayName) &&
-            !string.Equals(ownerDisplayName, "the owner", StringComparison.OrdinalIgnoreCase);
-        bool isNonDefaultSummary = !string.IsNullOrWhiteSpace(personaSummary) &&
-            !string.Equals(personaSummary, "Professional, concise, and direct.", StringComparison.OrdinalIgnoreCase);
-
-        bool passed = isNonDefaultOwner && isNonDefaultSummary;
         return new CopilotReadinessCheck(
-            Name: "persona_file_non_default",
-            Passed: passed,
-            Detail: passed ? "ok" : "owner_or_persona_is_default");
+            Name: "communication_twin_skill_loaded",
+            Passed: true,
+            Detail: "ok");
     }
 
     private static CopilotReadinessCheck EvaluateTokenCheck(MessageScreenerCopilotOptions options)
@@ -136,24 +123,4 @@ public sealed class CopilotReadinessService(
             OccurredAtUtc: DateTimeOffset.UtcNow);
     }
 
-    private static string ResolvePath(string configuredPath)
-    {
-        if (Path.IsPathRooted(configuredPath))
-        {
-            return configuredPath;
-        }
-
-        return Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), configuredPath));
-    }
-
-    private static string? GetString(JsonElement root, string propertyName)
-    {
-        if (!root.TryGetProperty(propertyName, out JsonElement value) ||
-            value.ValueKind != JsonValueKind.String)
-        {
-            return null;
-        }
-
-        return value.GetString();
-    }
 }

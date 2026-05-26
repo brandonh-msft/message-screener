@@ -14,8 +14,8 @@ Set-Location $repoRoot
 
 $runtimeConfigDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config"
 $runtimeSkillDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config/skills/communication-twin"
-$communicationTwinPath = Join-Path $runtimeSkillDirectory "communication-twin.json"
 $communicationTwinSkillPath = Join-Path $runtimeSkillDirectory "SKILL.md"
+$communicationTwinPath = Join-Path $runtimeSkillDirectory "communication-twin.json"
 $promptPath = Join-Path $repoRoot "scripts/prompts/communication-twin.workiq.prompt.md"
 
 function Resolve-CopilotCliCommand {
@@ -129,8 +129,12 @@ if (-not (Test-Path $promptPath)) {
     throw "Twin generation prompt was not found at $promptPath"
 }
 
-if ((Test-Path $communicationTwinPath) -and -not $Force) {
-    Write-Host "Communication twin already exists at $communicationTwinPath"
+if ((Test-Path $communicationTwinSkillPath) -and -not $Force) {
+    if (Test-Path $communicationTwinPath) {
+        Remove-Item -Path $communicationTwinPath -Force
+    }
+
+    Write-Host "Communication twin skill already exists at $communicationTwinSkillPath"
     Write-Host "Use -Force to overwrite it."
     exit 0
 }
@@ -178,20 +182,12 @@ try {
     }
 
     $jsonPayload = if ($jsonMatch.Groups[1].Success) { $jsonMatch.Groups[1].Value } else { $jsonMatch.Groups[2].Value }
-    Set-Content -Path $communicationTwinPath -Value $jsonPayload -Encoding utf8
 }
 catch {
     throw "Copilot CLI persona generation failed. Ensure Copilot CLI is authenticated and WorkIQ is available, then retry. Inner error: $($_.Exception.Message)"
 }
 
-if (-not (Test-Path $communicationTwinPath)) {
-    throw "Persona generation did not produce $communicationTwinPath"
-}
-
-$rawPersona = Get-Content -Path $communicationTwinPath -Raw
-Write-Debug "Raw persona JSON: $rawPersona"
-
-$persona = $rawPersona | ConvertFrom-Json -ErrorAction Stop
+$persona = $jsonPayload | ConvertFrom-Json -ErrorAction Stop
 
 if ([string]::IsNullOrWhiteSpace($persona.ownerDisplayName)) {
     throw "Generated persona is missing ownerDisplayName."
@@ -263,7 +259,10 @@ response rules:
 
 Set-Content -Path $communicationTwinSkillPath -Value $skillBody -Encoding utf8
 
-Write-Host "Communication twin JSON created at: $communicationTwinPath"
+if (Test-Path $communicationTwinPath) {
+    Remove-Item -Path $communicationTwinPath -Force
+}
+
 Write-Host "Communication twin skill created at: $communicationTwinSkillPath"
 Write-Host "Prompt source: $promptPath"
 Write-Host "Generated runtime twin artifacts are under src/MessageScreener.Api/copilot-config."

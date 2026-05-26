@@ -14,7 +14,6 @@ The setup script calls GitHub Copilot CLI and instructs it to use WorkIQ to gene
 
 Generated outputs:
 
-- `src/MessageScreener.Api/copilot-config/skills/communication-twin/communication-twin.json`
 - `src/MessageScreener.Api/copilot-config/skills/communication-twin/SKILL.md`
 
 Prompt source (setup-time only):
@@ -22,6 +21,7 @@ Prompt source (setup-time only):
 - `scripts/prompts/communication-twin.workiq.prompt.md`
 
 The generated twin files are deployment-shipped runtime files referenced by the screening pipeline. The setup prompt is a developer-time artifact only and is not part of product runtime configuration.
+The setup script removes the transient JSON response after generating `SKILL.md`.
 
 ## AI Boundary
 
@@ -248,7 +248,7 @@ Use these runtime files to tune deployed behavior:
 - Research-agent definition: `src/MessageScreener.Api/copilot-config/agents/message-screener-researcher.agent.md`
 - Research-agent prompting scaffold: `src/MessageScreener.Api/copilot-config/prompts/message-screener-reply.prompt.md`
 - Runtime system instructions: `src/MessageScreener.Api/copilot-config/prompts/copilot-reply.system.prompt.md`
-- Runtime communication persona: `src/MessageScreener.Api/copilot-config/skills/communication-twin/communication-twin.json` and `src/MessageScreener.Api/copilot-config/skills/communication-twin/SKILL.md`
+- Runtime communication persona: `src/MessageScreener.Api/copilot-config/skills/communication-twin/SKILL.md`
 - Setup-only twin generation prompt: `scripts/prompts/communication-twin.workiq.prompt.md` (not deployed runtime config)
 
 Use these MCP files intentionally by environment:
