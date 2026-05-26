@@ -143,7 +143,9 @@ if (-not [string]::IsNullOrWhiteSpace($baseUrl)) {
 if (-not [string]::IsNullOrWhiteSpace($skillAppId) -and -not [string]::IsNullOrWhiteSpace($baseUrl)) {
     $manifestUrl = "$($baseUrl.TrimEnd('/'))/manifest/message-screener-communication-twin-skill-1.0.json"
     Write-Host "Updating Entra app homepage URL to skill manifest: $manifestUrl"
-    az ad app update --id $skillAppId --web-home-page-url $manifestUrl | Out-Null
+    $identifierUri = "api://$skillAppId"
+    az ad app update --id $skillAppId --web-home-page-url $manifestUrl --identifier-uris $identifierUri | Out-Null
+    Write-Host "Ensured identifier URI for skill app registration: $identifierUri"
 }
 elseif ($UpdateHomepageOnly) {
     Write-Warning 'Skipped homepage update because skill app ID or public base URL was not available yet.'
