@@ -194,7 +194,10 @@ app.MapGet("/manifest/message-screener-communication-twin-skill-1.0.json", (
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
-    string baseUrl = $"{request.Scheme}://{request.Host}".TrimEnd('/');
+    string? configuredPublicBaseUrl = Environment.GetEnvironmentVariable("MESSAGE_SCREENER_PUBLIC_BASE_URL");
+    string baseUrl = !string.IsNullOrWhiteSpace(configuredPublicBaseUrl)
+        ? configuredPublicBaseUrl.TrimEnd('/')
+        : $"https://{request.Host}".TrimEnd('/');
     string endpointUrl = $"{baseUrl}/api/skills/communication-twin/messages";
 
     Dictionary<string, object?> manifest = new()
@@ -224,6 +227,7 @@ app.MapGet("/manifest/message-screener-communication-twin-skill-1.0.json", (
             [RewriteInUserVoiceSkillActivityId] = new Dictionary<string, object?>
             {
                 ["type"] = "event",
+                ["name"] = RewriteInUserVoiceSkillActivityId,
                 ["description"] = "Rewrite suggested response in the operating user's voice. Send rewrite payload in activity.value.",
             }
         }
