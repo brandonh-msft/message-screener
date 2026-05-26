@@ -208,7 +208,7 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
           }
           {
             name: 'MessageScreener__M365Auth__PublicBaseUrl'
-            value: service.outputs.uri
+            value: 'https://${messagescreenerApiResource.properties.configuration.ingress.fqdn}'
           }
           {
             name: 'MessageScreener__M365Auth__KeyVaultUrl'
