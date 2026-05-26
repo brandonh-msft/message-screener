@@ -100,14 +100,14 @@ At Runtime:
 
 1. **Add M365 OAuth app registration** (tenant admin task, documented in setup):
    - Scopes: `Mail.Read`, `Chat.Read`, `TeamsActivity.Read` (minimum for WorkIQ)
-   - Redirect URI: `https://<api-base>/auth/m365/callback`
+   - Redirect URI: `https://<api-base>/api/authm365/callback`
    - Client ID & Secret → stored in Key Vault
 
-2. **Add `/auth/m365/initiate` endpoint** (unauthenticated):
-   - Initiates OAuth2 Device Flow or Authorization Code Flow.
-   - Returns device code (device flow) or redirect URI.
+2. **Add `/api/authm365/start` endpoint** (unauthenticated):
+   - Initiates OAuth2 Authorization Code + PKCE flow.
+   - Returns redirect URI for browser sign-in.
 
-3. **Add `/auth/m365/callback` endpoint**:
+3. **Add `/api/authm365/callback` endpoint**:
    - Receives auth code from owner.
    - Exchanges code for access_token + refresh_token.
    - Stores refresh_token in Key Vault with owner identifier.
@@ -217,7 +217,7 @@ At Runtime:
 
 ### v1 (Near-term: Manual Setup)
 1. **Tenant admin registers app** in Entra ID (manual, documented).
-2. **Owner authenticates once** via Device Flow or authorization endpoint.
+2. **Owner authenticates once** via browser authorization endpoint (`/api/authm365/start`).
 3. **Refresh token stored in Key Vault**.
 4. **Option C (Credential Bridge)** implemented: token written to temp file before session.
 5. **WorkIQ calls fetch user's data** using environment-injected token.
@@ -249,9 +249,9 @@ At Runtime:
 
 - [ ] Add M365 OAuth app registration (Entra ID).
 - [ ] Implement `IM365TokenProvider` interface.
-- [ ] Add `/auth/m365/initiate` endpoint.
-- [ ] Add `/auth/m365/callback` endpoint.
-- [ ] Add `/auth/m365/revoke` endpoint.
+- [ ] Add `/api/authm365/start` endpoint.
+- [ ] Add `/api/authm365/callback` endpoint.
+- [ ] Add `/api/authm365/revoke` endpoint.
 - [ ] Implement token cache + refresh logic.
 - [ ] Update `.mcp.json` or create credential bridge for WorkIQ auth.
 - [ ] Update `CopilotReadinessService` to report M365 auth status.
@@ -262,6 +262,6 @@ At Runtime:
 ## References
 
 - [Microsoft Graph Authentication](https://learn.microsoft.com/graph/auth/)
-- [OAuth 2.0 Device Flow](https://learn.microsoft.com/azure/active-directory/develop/v2-oauth2-device-code)
+- [OAuth 2.0 Authorization Code Flow with PKCE](https://learn.microsoft.com/azure/active-directory/develop/v2-oauth2-auth-code-flow)
 - [Model Context Protocol (MCP) Spec](https://modelcontextprotocol.io/)
 - [GitHub Copilot SDK Documentation](https://github.com/github/copilot-sdk)

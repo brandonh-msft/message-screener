@@ -200,14 +200,12 @@ try {
     Write-Status "Tenant ID: $tenantId"
     
     # Determine reply URL from azd environment.
-    # Device-code flow used by this project does not require redirect URI at runtime.
-    # We still register one for future compatibility, but do not fail if API URL is not yet known.
+    # Authorization code + PKCE requires an exact callback URI match in app registration.
     $apiBase = $env:MESSAGE_SCREENER_PUBLIC_BASE_URL
     if ([string]::IsNullOrWhiteSpace($apiBase)) {
-        $apiBase = "https://localhost"
-        Write-Status "API base URL not found in env. Using placeholder redirect base: $apiBase (safe for device-code flow)." -Level "Warn"
+        throw "MESSAGE_SCREENER_PUBLIC_BASE_URL is required for app registration redirect URI. Set it with: azd env set MESSAGE_SCREENER_PUBLIC_BASE_URL https://<deployed-api-url>"
     }
-    $replyUrl = "$apiBase/auth/m365/callback"
+    $replyUrl = "$apiBase/api/authm365/callback"
     Write-Status "Reply URL: $replyUrl"
     
     # Check for existing app

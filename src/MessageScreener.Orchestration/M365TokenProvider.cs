@@ -56,6 +56,12 @@ public sealed class M365TokenProviderOptions
     public string? TenantId { get; init; } = "common";
 
     /// <summary>
+    /// Optional externally reachable API base URL used for OAuth callback URI construction.
+    /// Example: https://messagescreener-api.contoso.com
+    /// </summary>
+    public string? PublicBaseUrl { get; init; }
+
+    /// <summary>
     /// URI of Key Vault secret containing refresh token.
     /// Format: https://vault.azure.net/secrets/secret-name
     /// </summary>

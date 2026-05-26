@@ -207,6 +207,10 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
             value: m365TenantId
           }
           {
+            name: 'MessageScreener__M365Auth__PublicBaseUrl'
+            value: service.outputs.uri
+          }
+          {
             name: 'MessageScreener__M365Auth__KeyVaultUrl'
             value: 'https://${keyVault.name}.${environment().suffixes.keyvaultDns}/'
           }

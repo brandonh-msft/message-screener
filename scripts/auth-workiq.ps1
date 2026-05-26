@@ -146,67 +146,58 @@ try {
         exit 0
     }
 
-    Write-Status "Initiating device flow..."
+    Write-Status "Starting authorization code + PKCE flow..."
     try {
-        $initiate = Invoke-RestMethod -Method Post -Uri "$authEndpointBase/initiate"
+        $start = Invoke-RestMethod -Method Post -Uri "$authEndpointBase/start"
     }
     catch {
         $statusCode = Get-HttpStatusCode -ErrorRecord $_
         $errorText = Read-ProblemDetail -ErrorRecord $_
 
         if ($statusCode -eq 400) {
-            throw "Initiate request failed (400): $errorText. This usually means the deployed app is missing MessageScreener__M365Auth runtime settings. Re-run provision/deploy with the latest infra so MESSAGE_SCREENER_M365_CLIENT_ID/MESSAGE_SCREENER_M365_CLIENT_SECRET/MESSAGE_SCREENER_M365_TENANT_ID are passed into the container app environment."
+            throw "Start request failed (400): $errorText. This usually means M365 auth runtime settings are incomplete in the deployed app, or app registration redirect URI does not match the API callback URL."
         }
 
-        throw "Initiate request failed: $errorText"
+        throw "Start request failed: $errorText"
     }
 
-    if ([string]::IsNullOrWhiteSpace($initiate.deviceCode)) {
-        throw "Initiate response did not include deviceCode."
+    if ([string]::IsNullOrWhiteSpace($start.authorizationUrl)) {
+        throw "Start response did not include authorizationUrl."
     }
 
     Write-Host ""
-    Write-Host "User code: $($initiate.userCode)" -ForegroundColor Yellow
-    Write-Host "Verification URL: $($initiate.verificationUri)" -ForegroundColor Yellow
+    Write-Host "Authorization URL: $($start.authorizationUrl)" -ForegroundColor Yellow
     Write-Host ""
 
-    if ($OpenBrowser) {
-        Write-Status "Opening verification URL in your browser..."
-        Start-Process $initiate.verificationUri
+    if ($OpenBrowser -or -not $PSBoundParameters.ContainsKey('OpenBrowser')) {
+        Write-Status "Opening authorization URL in your browser..."
+        Start-Process $start.authorizationUrl
+    }
+    else {
+        Write-Status "Open the URL above in your browser to continue sign-in."
     }
 
-    Write-Status "Complete sign-in with the code above. Polling for completion..."
+    Write-Status "Complete browser sign-in, then waiting for callback completion..."
 
-    $interval = if ($initiate.interval -and $initiate.interval -gt 0) { [int]$initiate.interval } else { 5 }
+    $interval = 5
     $deadline = (Get-Date).ToUniversalTime().AddSeconds($MaxWaitSeconds)
 
     while ((Get-Date).ToUniversalTime() -lt $deadline) {
         Start-Sleep -Seconds $interval
 
         try {
-            $pollBody = @{ device_code = $initiate.deviceCode } | ConvertTo-Json
-            $poll = Invoke-RestMethod `
-                -Method Post `
-                -Uri "$authEndpointBase/poll" `
-                -ContentType "application/json" `
-                -Body $pollBody
-
-            if ($poll.isAuthorized -or $poll.status -eq "authorized") {
+            $status = Invoke-RestMethod -Method Get -Uri "$authEndpointBase/status"
+            if ($status.isConfigured) {
                 Write-Status "M365 authentication completed successfully." -Level "Success"
                 Write-Status "WorkIQ can now access your M365 data." -Level "Success"
                 exit 0
             }
 
-            if ($poll.status -eq "pending") {
-                Write-Status "Still waiting for authorization..."
-                continue
-            }
-
-            Write-Status "Unexpected poll status: $($poll.status). Waiting..." -Level "Warn"
+            Write-Status "Still waiting for authorization callback..."
         }
         catch {
             $errorText = Read-ProblemDetail -ErrorRecord $_
-            throw "Polling failed: $errorText"
+            throw "Status check failed: $errorText"
         }
     }
 

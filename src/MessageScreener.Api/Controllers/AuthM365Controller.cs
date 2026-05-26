@@ -1,38 +1,42 @@
+using MessageScreener.Orchestration;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using MessageScreener.Orchestration;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace MessageScreener.Api.Controllers;
 
 /// <summary>
 /// Handles M365 OAuth2 authentication flow for WorkIQ MCP integration.
-/// Owner authenticates once, and refresh token is securely stored.
+/// Uses authorization code flow with PKCE and secure refresh token storage.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public sealed class AuthM365Controller(
     IM365TokenProvider m365TokenProvider,
     IHttpClientFactory httpClientFactory,
+    IMemoryCache pkceStateCache,
     ILogger<AuthM365Controller> logger) : ControllerBase
 {
-    private const string DeviceAuthEndpoint = "https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/devicecode";
+    private const string AuthorizeEndpoint = "https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/authorize";
     private const string TokenEndpoint = "https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token";
-    private const string M365Scope = "Mail.Read Chat.Read TeamsActivity.Read";
+    private const string M365Scope = "offline_access Mail.Read Chat.Read TeamsActivity.Read";
+    private const string PkceStateCachePrefix = "m365-auth-state:";
+    private const int PkceStateTtlSeconds = 900;
 
     /// <summary>
-    /// Initiates M365 Device Flow authentication.
-    /// Returns device code and user code that owner uses to authenticate.
+    /// Starts browser-based authorization code + PKCE flow.
+    /// Returns an authorization URL the owner opens to complete sign-in.
     /// </summary>
-    [HttpPost("initiate")]
-    [ProducesResponseType(typeof(M365AuthInitiateResponse), StatusCodes.Status200OK)]
+    [HttpPost("start")]
+    [ProducesResponseType(typeof(M365AuthStartResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> InitiateAsync(
-        [FromServices] IOptions<M365TokenProviderOptions> options,
-        CancellationToken cancellationToken)
+    public IActionResult StartAsync([FromServices] IOptions<M365TokenProviderOptions> options)
     {
         if (TryCreateM365ConfigurationProblem(options.Value, out ProblemDetails? configProblem))
         {
@@ -41,71 +45,52 @@ public sealed class AuthM365Controller(
 
         try
         {
-            string tenantId = options.Value.TenantId ?? "common";
-            using HttpClient http = httpClientFactory.CreateClient();
-
-            var request = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["client_id"] = options.Value.ClientId!,
-                ["scope"] = M365Scope,
-            });
-
-            string deviceAuthEndpoint = DeviceAuthEndpoint.Replace("{tenantId}", tenantId);
-            using HttpResponseMessage response = await http.PostAsync(deviceAuthEndpoint, request, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                string errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
-                AuthM365ControllerLog.InitiateFailed(logger, response.StatusCode, errorBody);
-                return StatusCode((int)response.StatusCode, new ProblemDetails
-                {
-                    Title = "Device Code Request Failed",
-                    Detail = $"Failed to initiate device flow: {response.StatusCode}"
-                });
-            }
-
-            string content = await response.Content.ReadAsStringAsync(cancellationToken);
-            JsonElement json = JsonSerializer.Deserialize<JsonElement>(content);
-
-            string deviceCode = json.GetProperty("device_code").GetString()
-                ?? throw new InvalidOperationException("Missing device_code in response.");
-            string userCode = json.GetProperty("user_code").GetString()
-                ?? throw new InvalidOperationException("Missing user_code in response.");
-            string verificationUri = json.GetProperty("verification_uri").GetString()
-                ?? throw new InvalidOperationException("Missing verification_uri in response.");
-
-            AuthM365ControllerLog.DeviceCodeIssued(logger, userCode);
-
-            return Ok(new M365AuthInitiateResponse(
-                DeviceCode: deviceCode,
-                UserCode: userCode,
-                VerificationUri: verificationUri,
-                ExpiresIn: json.GetProperty("expires_in").GetInt32(),
-                Interval: json.TryGetProperty("interval", out JsonElement intVal)
-                    ? intVal.GetInt32()
-                    : 5));
+            M365AuthStartResponse response = BuildStartResponse(options.Value);
+            AuthM365ControllerLog.AuthStartCreated(logger);
+            return Ok(response);
         }
         catch (Exception ex)
         {
-            AuthM365ControllerLog.InitiateException(logger, ex.Message);
+            AuthM365ControllerLog.StartException(logger, ex.Message);
             return StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails
             {
-                Title = "Initiation Failed",
+                Title = "Authorization Start Failed",
                 Detail = $"An error occurred: {ex.Message}"
             });
         }
     }
 
     /// <summary>
-    /// Polls for device flow authentication completion.
-    /// Owner visits VerificationUri with UserCode; once they complete auth, this returns the token.
+    /// Convenience browser endpoint that redirects directly to Entra authorize URL.
     /// </summary>
-    [HttpPost("poll")]
-    [ProducesResponseType(typeof(M365AuthPollResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(M365AuthPollResponse), StatusCodes.Status202Accepted)]
+    [HttpGet("start")]
+    [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> PollAsync(
-        [FromBody] M365AuthPollRequest request,
+    public IActionResult StartRedirectAsync([FromServices] IOptions<M365TokenProviderOptions> options)
+    {
+        if (TryCreateM365ConfigurationProblem(options.Value, out ProblemDetails? configProblem))
+        {
+            return BadRequest(configProblem);
+        }
+
+        M365AuthStartResponse response = BuildStartResponse(options.Value);
+        AuthM365ControllerLog.AuthStartRedirect(logger);
+        return Redirect(response.AuthorizationUrl);
+    }
+
+    /// <summary>
+    /// OAuth callback endpoint for authorization code + PKCE.
+    /// Exchanges code for refresh token and stores it in Key Vault.
+    /// </summary>
+    [HttpGet("callback")]
+    [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> CallbackAsync(
+        [FromQuery] string? code,
+        [FromQuery] string? state,
+        [FromQuery] string? error,
+        [FromQuery(Name = "error_description")] string? errorDescription,
         [FromServices] IOptions<M365TokenProviderOptions> options,
         CancellationToken cancellationToken)
     {
@@ -114,89 +99,93 @@ public sealed class AuthM365Controller(
             return BadRequest(configProblem);
         }
 
-        if (string.IsNullOrWhiteSpace(request.DeviceCode))
+        if (!string.IsNullOrWhiteSpace(error))
         {
+            AuthM365ControllerLog.CallbackError(logger, error, errorDescription ?? string.Empty);
             return BadRequest(new ProblemDetails
             {
-                Title = "Invalid Request",
-                Detail = "DeviceCode is required."
+                Title = "Authorization Denied",
+                Detail = $"OAuth error: {error}. {errorDescription}"
             });
         }
 
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid Callback",
+                Detail = "Missing required query parameters: code and state."
+            });
+        }
+
+        string cacheKey = BuildPkceStateCacheKey(state);
+        if (!pkceStateCache.TryGetValue(cacheKey, out PkceAuthState? pkceState) || pkceState is null)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid or Expired State",
+                Detail = "The auth state is missing or expired. Start authentication again."
+            });
+        }
+
+        pkceStateCache.Remove(cacheKey);
+
         try
         {
-            string tenantId = options.Value.TenantId ?? "common";
             using HttpClient http = httpClientFactory.CreateClient();
 
             var tokenRequest = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["client_id"] = options.Value.ClientId!,
                 ["client_secret"] = options.Value.ClientSecret!,
-                ["device_code"] = request.DeviceCode,
-                ["grant_type"] = "urn:ietf:params:oauth:grant-type:device_code",
+                ["code"] = code,
+                ["grant_type"] = "authorization_code",
+                ["redirect_uri"] = pkceState.RedirectUri,
+                ["code_verifier"] = pkceState.CodeVerifier,
+                ["scope"] = M365Scope,
             });
 
-            string tokenEndpoint = TokenEndpoint.Replace("{tenantId}", tenantId);
+            string tokenEndpoint = TokenEndpoint.Replace("{tenantId}", options.Value.TenantId ?? "common");
             using HttpResponseMessage response = await http.PostAsync(tokenEndpoint, tokenRequest, cancellationToken);
 
             string content = await response.Content.ReadAsStringAsync(cancellationToken);
-            JsonElement json = JsonSerializer.Deserialize<JsonElement>(content);
-
-            // Device flow returns "authorization_pending" while waiting.
-            if (json.TryGetProperty("error", out JsonElement errorProp))
+            if (!response.IsSuccessStatusCode)
             {
-                string error = errorProp.GetString() ?? "unknown";
-
-                if (error == "authorization_pending")
+                AuthM365ControllerLog.TokenExchangeFailed(logger, response.StatusCode, content);
+                return StatusCode((int)response.StatusCode, new ProblemDetails
                 {
-                    AuthM365ControllerLog.AuthorizationPending(logger);
-                    return Accepted(new M365AuthPollResponse(
-                        Status: "pending",
-                        Message: "Waiting for owner authorization.",
-                        IsAuthorized: false));
-                }
-
-                if (error == "expired_token")
-                {
-                    AuthM365ControllerLog.DeviceCodeExpired(logger);
-                    return BadRequest(new ProblemDetails
-                    {
-                        Title = "Device Code Expired",
-                        Detail = "The device code has expired. Please initiate again."
-                    });
-                }
-
-                AuthM365ControllerLog.TokenExchangeFailed(logger, error);
-                return BadRequest(new ProblemDetails
-                {
-                    Title = "Authentication Failed",
-                    Detail = $"Error: {error}"
+                    Title = "Token Exchange Failed",
+                    Detail = $"Failed to exchange authorization code: {response.StatusCode}"
                 });
             }
 
-            // Success: extract tokens.
-            string accessToken = json.GetProperty("access_token").GetString()
-                ?? throw new InvalidOperationException("Missing access_token in response.");
+            JsonElement json = JsonSerializer.Deserialize<JsonElement>(content);
             string refreshToken = json.GetProperty("refresh_token").GetString()
-                ?? throw new InvalidOperationException("Missing refresh_token in response.");
+                ?? throw new InvalidOperationException("Missing refresh_token in token response.");
 
-            // Store refresh token securely.
             await m365TokenProvider.StoreM365RefreshTokenAsync(refreshToken, cancellationToken);
-
             AuthM365ControllerLog.TokensObtained(logger);
 
-            return Ok(new M365AuthPollResponse(
-                Status: "authorized",
-                Message: "Authorization successful. WorkIQ can now access your M365 data.",
-                IsAuthorized: true,
-                AccessToken: accessToken));
+            const string successHtml = """
+<!DOCTYPE html>
+<html>
+  <head><title>Message Screener Auth Complete</title></head>
+  <body style="font-family:Segoe UI,Arial,sans-serif;padding:24px;">
+    <h2>Authentication complete</h2>
+    <p>WorkIQ can now access your M365 data for Message Screener.</p>
+    <p>You can close this window and return to the terminal.</p>
+  </body>
+</html>
+""";
+
+            return Content(successHtml, "text/html");
         }
         catch (Exception ex)
         {
-            AuthM365ControllerLog.PollException(logger, ex.Message);
+            AuthM365ControllerLog.CallbackException(logger, ex.Message);
             return StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails
             {
-                Title = "Poll Failed",
+                Title = "Authorization Callback Failed",
                 Detail = $"An error occurred: {ex.Message}"
             });
         }
@@ -236,7 +225,6 @@ public sealed class AuthM365Controller(
         CancellationToken cancellationToken)
     {
         bool hasConfigError = TryCreateM365ConfigurationProblem(options.Value, out ProblemDetails? configProblem);
-
         bool hasAuth = await m365TokenProvider.HasValidM365AuthAsync(cancellationToken);
 
         return Ok(new M365AuthStatusResponse(
@@ -245,7 +233,65 @@ public sealed class AuthM365Controller(
                 ? "M365 authentication is configured. WorkIQ can access your data."
                 : hasConfigError
                     ? configProblem!.Detail ?? "M365 authentication is not configured."
-                    : "M365 authentication is not configured. Please authenticate via POST /api/authm365/initiate."));
+                    : "M365 authentication is not configured. Start via POST /api/authm365/start or GET /api/authm365/start."));
+    }
+
+    private M365AuthStartResponse BuildStartResponse(M365TokenProviderOptions options)
+    {
+        string tenantId = options.TenantId ?? "common";
+        string redirectUri = ResolveRedirectUri(options);
+        string state = CreateRandomToken(32);
+        string codeVerifier = CreateRandomToken(48);
+        string codeChallenge = CreateCodeChallenge(codeVerifier);
+
+        string cacheKey = BuildPkceStateCacheKey(state);
+        pkceStateCache.Set(
+            cacheKey,
+            new PkceAuthState(codeVerifier, redirectUri),
+            TimeSpan.FromSeconds(PkceStateTtlSeconds));
+
+        string authorizeEndpoint = AuthorizeEndpoint.Replace("{tenantId}", tenantId);
+        Dictionary<string, string?> query = new()
+        {
+            ["client_id"] = options.ClientId,
+            ["response_type"] = "code",
+            ["redirect_uri"] = redirectUri,
+            ["response_mode"] = "query",
+            ["scope"] = M365Scope,
+            ["state"] = state,
+            ["code_challenge"] = codeChallenge,
+            ["code_challenge_method"] = "S256",
+            ["prompt"] = "select_account"
+        };
+
+        string authorizationUrl = QueryHelpers.AddQueryString(authorizeEndpoint, query);
+        return new M365AuthStartResponse(authorizationUrl, PkceStateTtlSeconds);
+    }
+
+    private string ResolveRedirectUri(M365TokenProviderOptions options)
+    {
+        if (!string.IsNullOrWhiteSpace(options.PublicBaseUrl))
+        {
+            return $"{options.PublicBaseUrl.TrimEnd('/')}/api/authm365/callback";
+        }
+
+        string requestBase = $"{Request.Scheme}://{Request.Host}";
+        return $"{requestBase}/api/authm365/callback";
+    }
+
+    private static string BuildPkceStateCacheKey(string state) => $"{PkceStateCachePrefix}{state}";
+
+    private static string CreateRandomToken(int byteLength)
+    {
+        byte[] bytes = RandomNumberGenerator.GetBytes(byteLength);
+        return WebEncoders.Base64UrlEncode(bytes);
+    }
+
+    private static string CreateCodeChallenge(string codeVerifier)
+    {
+        byte[] verifierBytes = Encoding.UTF8.GetBytes(codeVerifier);
+        byte[] hash = SHA256.HashData(verifierBytes);
+        return WebEncoders.Base64UrlEncode(hash);
     }
 
     private static bool TryCreateM365ConfigurationProblem(
@@ -289,33 +335,16 @@ public sealed class AuthM365Controller(
 
         return true;
     }
+
+    private sealed record PkceAuthState(string CodeVerifier, string RedirectUri);
 }
 
 /// <summary>
-/// Response from POST /api/authm365/initiate
+/// Response from POST /api/authm365/start
 /// </summary>
-public sealed record M365AuthInitiateResponse(
-    string DeviceCode,
-    string UserCode,
-    string VerificationUri,
-    int ExpiresIn,
-    int Interval);
-
-/// <summary>
-/// Request to POST /api/authm365/poll
-/// </summary>
-public sealed record M365AuthPollRequest(
-    [property: JsonPropertyName("device_code")]
-    string DeviceCode);
-
-/// <summary>
-/// Response from POST /api/authm365/poll
-/// </summary>
-public sealed record M365AuthPollResponse(
-    string Status,
-    string Message,
-    bool IsAuthorized,
-    string? AccessToken = null);
+public sealed record M365AuthStartResponse(
+    string AuthorizationUrl,
+    int ExpiresInSeconds);
 
 /// <summary>
 /// Response from GET /api/authm365/status
@@ -329,32 +358,26 @@ public sealed record M365AuthStatusResponse(
 /// </summary>
 internal static partial class AuthM365ControllerLog
 {
-    [LoggerMessage(Level = LogLevel.Information, Message = "Device code issued for user code: {UserCode}")]
-    internal static partial void DeviceCodeIssued(ILogger logger, string userCode);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Created authorization URL for PKCE flow.")]
+    internal static partial void AuthStartCreated(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Device code initiation failed. Status: {StatusCode}. Body: {ErrorBody}")]
-    internal static partial void InitiateFailed(ILogger logger, System.Net.HttpStatusCode statusCode, string errorBody);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Redirecting user to Entra authorization URL.")]
+    internal static partial void AuthStartRedirect(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Exception during initiation: {Message}")]
-    internal static partial void InitiateException(ILogger logger, string message);
+    [LoggerMessage(Level = LogLevel.Error, Message = "Exception during auth start: {Message}")]
+    internal static partial void StartException(ILogger logger, string message);
 
-    [LoggerMessage(Level = LogLevel.Debug, Message = "Authorization pending. Owner has not yet authenticated.")]
-    internal static partial void AuthorizationPending(ILogger logger);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "OAuth callback returned error: {Error}. {Description}")]
+    internal static partial void CallbackError(ILogger logger, string error, string description);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Device code has expired.")]
-    internal static partial void DeviceCodeExpired(ILogger logger);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Token exchange failed with error: {Error}")]
-    internal static partial void TokenExchangeFailed(ILogger logger, string error);
+    [LoggerMessage(Level = LogLevel.Error, Message = "Token exchange failed. Status: {StatusCode}. Body: {ErrorBody}")]
+    internal static partial void TokenExchangeFailed(ILogger logger, System.Net.HttpStatusCode statusCode, string errorBody);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "M365 tokens obtained and stored.")]
     internal static partial void TokensObtained(ILogger logger);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Exception during poll: {Message}")]
-    internal static partial void PollException(ILogger logger, string message);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "M365 authentication revoked.")]
-    internal static partial void Revoked(ILogger logger);
+    [LoggerMessage(Level = LogLevel.Error, Message = "Exception during callback: {Message}")]
+    internal static partial void CallbackException(ILogger logger, string message);
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Exception during revocation: {Message}")]
     internal static partial void RevokeException(ILogger logger, string message);

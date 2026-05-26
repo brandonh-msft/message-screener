@@ -230,8 +230,8 @@ pwsh ./scripts/auth-workiq.ps1 -ApiBaseUrl https://<api-url> -OpenBrowser
 
 The script:
 1. Checks `/api/authm365/status`
-2. Calls `/api/authm365/initiate` and prints user code + verification URL
-3. Polls `/api/authm365/poll` until authorization completes
+2. Calls `/api/authm365/start` and opens browser-based sign-in
+3. Polls `/api/authm365/status` until callback/token exchange completes
 4. Exits when refresh token is stored and WorkIQ auth is ready
 
 **Status & Management:**

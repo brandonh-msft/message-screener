@@ -40,7 +40,7 @@ hooks:
 
 2. **Creates/Updates M365 App**
    - Registers app named "Message Screener WorkIQ" in Entra ID
-   - Sets reply URL to `https://<api-url>/auth/m365/callback`
+   - Sets reply URL to `https://<api-url>/api/authm365/callback`
    - Requests Microsoft Graph scopes: `Mail.Read`, `Chat.Read`, `TeamsActivity.Read`
 
 3. **Manages Credentials**
@@ -128,7 +128,7 @@ The M365 app is registered with minimal-privilege scopes:
 **Why These?**
 - Minimal permissions (read-only, no write/delete)
 - Sufficient for WorkIQ to analyze communication patterns
-- User must still grant consent individually via Device Flow auth
+- User must still grant consent individually via browser auth flow
 
 ## Security & Compliance
 
@@ -236,8 +236,9 @@ azd deploy
 [Seed Key Vault secrets from azd env + deploy container with M365Auth config]
     ↓
 Owner initiates M365 auth:
-POST /api/authm365/initiate
-    → Device code exchange
+POST /api/authm365/start
+    → Browser redirect to Entra (PKCE)
+    → Callback at /api/authm365/callback
     → Refresh token stored in KV
     → WorkIQ can query M365
 ```
@@ -273,8 +274,8 @@ After the hook completes, `.NET appsettings` are configured via `azd deploy`:
    ```
 
 3. **Owner Authenticates**
-   - Visit: `POST https://<api-url>/api/authm365/initiate`
-   - Follow device code flow
+   - Run: `pwsh ./scripts/auth-workiq.ps1`
+   - Browser completes auth code + PKCE flow
    - Refresh token stored securely
 
 4. **Verify Readiness**
@@ -287,4 +288,4 @@ After the hook completes, `.NET appsettings` are configured via `azd deploy`:
 - [Azure Developer CLI](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/)
 - [azd Hooks](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/azd-reference#hooks)
 - [Azure CLI App Registration](https://learn.microsoft.com/en-us/cli/azure/ad/app?view=azure-cli-latest)
-- [OAuth 2.0 Device Flow](https://datatracker.ietf.org/doc/html/rfc8628)
+- [OAuth 2.0 Authorization Code Flow with PKCE](https://datatracker.ietf.org/doc/html/rfc7636)

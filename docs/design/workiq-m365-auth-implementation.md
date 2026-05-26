@@ -15,7 +15,7 @@ This guide documents the implementation of M365 authentication for WorkIQ MCP in
 **File:** [src/MessageScreener.Orchestration/M365TokenProvider.cs](../src/MessageScreener.Orchestration/M365TokenProvider.cs)
 
 **Capabilities:**
-- Device Flow OAuth2 to obtain owner's M365 authorization
+- Authorization Code + PKCE OAuth2 to obtain owner's M365 authorization
 - Secure refresh token storage in Azure Key Vault
 - Automatic access token refresh with 5-minute buffer
 - Token revocation support
@@ -31,8 +31,8 @@ IM365TokenProvider
 ```
 
 **Token Lifecycle:**
-1. Owner initiates Device Flow auth (`/auth/m365/initiate`)
-2. Polls for completion (`/auth/m365/poll`)
+1. Owner starts browser auth (`/api/authm365/start`)
+2. Browser returns to callback (`/api/authm365/callback`)
 3. Refresh token stored securely in Key Vault
 4. On-demand: Access token retrieved/refreshed automatically
 5. Can be revoked anytime (`/auth/m365/revoke`)
@@ -65,21 +65,20 @@ McpCredentialContext
 3. Token available to MCP server via `$M365_ACCESS_TOKEN` or credential file
 4. After session, call `IMcpCredentialBridge.CleanupCredentialContextAsync()` to purge temp files
 
-### OAuth2 Device Flow Endpoints
+### OAuth2 Authorization Code + PKCE Endpoints
 
 **File:** [src/MessageScreener.Api/Controllers/AuthM365Controller.cs](../src/MessageScreener.Api/Controllers/AuthM365Controller.cs)
 
 **Endpoints:**
 
-1. **POST `/api/authm365/initiate`**
-   - Initiates Device Flow
-   - Returns device code + user code
-   - Owner visits verification URI to authenticate
+1. **POST `/api/authm365/start`**
+   - Starts authorization code + PKCE flow
+   - Returns authorization URL for browser sign-in
 
-2. **POST `/api/authm365/poll`**
-   - Polls for auth completion (call repeatedly until authorized)
-   - Returns status: `pending`, `authorized`, or error
-   - On success, refresh token is stored securely
+2. **GET `/api/authm365/callback`**
+   - Receives auth code from Entra after browser sign-in
+   - Exchanges code for access + refresh token
+   - Stores refresh token securely
 
 3. **POST `/api/authm365/revoke`**
    - Revokes M365 authentication
@@ -162,9 +161,8 @@ finally
 
 - [ ] Register M365 app in Entra ID (tenant admin task)
 - [ ] Set configuration via `azd env set` or appsettings
-- [ ] Test `POST /api/authm365/initiate` → receive device code
-- [ ] Owner authenticates via verification URI
-- [ ] Test `POST /api/authm365/poll` → returns authorized status
+- [ ] Test `POST /api/authm365/start` → receive authorization URL
+- [ ] Owner authenticates in browser and callback completes
 - [ ] Verify refresh token stored in Key Vault
 - [ ] Test `GET /api/authm365/status` → returns `IsConfigured: true`
 - [ ] Test `IM365TokenProvider.GetM365AccessTokenAsync()` → returns valid token
@@ -175,16 +173,16 @@ finally
 
 ## Key Design Decisions
 
-### 1. Device Flow vs. Authorization Code Flow
+### 1. Authorization Code + PKCE vs. Device Flow
 
-**Chosen:** Device Flow
+**Chosen:** Authorization Code + PKCE
 
 **Rationale:**
-- No browser redirect required (headless/service context)
-- Owner gets clear user code to enter
-- Works well for internal tools
+- Better alignment with Conditional Access device/user policies
+- Interactive browser sign-in fits managed device requirements
+- Modern OAuth recommendation for native/browser-involved clients
 
-**Alternative:** Authorization Code Flow (if interactive browser available)
+**Alternative:** Device Flow (deprecated for this project)
 
 ### 2. Refresh Token Storage
 
@@ -246,8 +244,8 @@ finally
 - GHCP SDK does not support passing credentials to MCP servers natively
   - Workaround: Environment variable + temp file
   - Future: Propose `SessionConfig.M365Token` to GitHub Copilot SDK
-- Device Flow requires owner to manually authenticate once
-  - Could add silent refresh via browser for interactive scenarios
+- Browser flow requires one-time interactive owner sign-in
+  - Future: smoother UX via direct portal deep-link onboarding
 - M365 scopes are hardcoded (could be configurable)
 
 ### Future Enhancements
@@ -266,4 +264,3 @@ finally
 - [Azure Key Vault SDK](https://learn.microsoft.com/en-us/azure/key-vault/general/overview)
 - [Microsoft SFI Defaults](https://microsoft.github.io/security-framework-implementation/)
 - [Source-Generated Logging](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator)
-
