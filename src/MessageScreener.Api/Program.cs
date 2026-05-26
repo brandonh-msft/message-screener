@@ -20,6 +20,7 @@ const string ServiceName = "MessageScreener.Api";
 const string ServiceVersion = "0.1.0";
 const string ForwardMessageActionCommandId = "forwardToMessageScreener";
 const string RewriteInUserVoiceSkillActivityId = "rewriteInUserVoice";
+const string CommunicationTwinRewriteToolName = "communication_twin_rewrite";
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -56,6 +57,7 @@ builder.Services.AddScoped<IForwardActionProcessor, ForwardActionProcessor>();
 builder.Services.AddHostedService<ForwardActionBackgroundService>();
 builder.Services.AddScoped<ITeamsMessageClient, BotConnectorMessageClient>();
 builder.Services.AddScoped<IReviewDeliveryService, ReviewDeliveryService>();
+builder.Services.AddSingleton<CommunicationTwinMcpStreamStore>();
 builder.Services.AddHttpClient();
 
 builder.Services.AddOpenTelemetry()
@@ -101,6 +103,260 @@ app.MapGet("/health", () => Results.Ok(new
 app.MapGet("/privacy", () => Results.Text(
     "Message Screener processes message context to generate review-first drafts and skill responses. No automatic sends are performed.",
     "text/plain"));
+
+app.MapPost("/api/mcp", async (
+    HttpRequest request,
+    ICopilotReplyDraftingService copilotReplyDraftingService,
+    ICommunicationTwinService communicationTwinService,
+    IGhcpAgentHarness ghcpAgentHarness,
+    CommunicationTwinMcpStreamStore streamStore,
+    CancellationToken cancellationToken) =>
+{
+    JsonDocument body;
+    try
+    {
+        body = await JsonDocument.ParseAsync(request.Body, cancellationToken: cancellationToken);
+    }
+    catch (JsonException)
+    {
+        return Results.BadRequest(new
+        {
+            jsonrpc = "2.0",
+            id = (object?)null,
+            error = new { code = -32700, message = "Parse error" }
+        });
+    }
+
+    using (body)
+    {
+        JsonElement root = body.RootElement;
+        object? id = GetJsonRpcId(root);
+        string? method = GetJsonString(root, "method");
+
+        if (string.IsNullOrWhiteSpace(method))
+        {
+            return Results.Json(new
+            {
+                jsonrpc = "2.0",
+                id,
+                error = new { code = -32600, message = "Invalid Request" }
+            });
+        }
+
+        if (string.Equals(method, "initialize", StringComparison.Ordinal))
+        {
+            return Results.Json(new
+            {
+                jsonrpc = "2.0",
+                id,
+                result = new
+                {
+                    protocolVersion = "2024-11-05",
+                    capabilities = new { tools = new { } },
+                    serverInfo = new { name = "message-screener-mcp", version = ServiceVersion }
+                }
+            });
+        }
+
+        if (string.Equals(method, "tools/list", StringComparison.Ordinal))
+        {
+            return Results.Json(new
+            {
+                jsonrpc = "2.0",
+                id,
+                result = new
+                {
+                    tools = new object[]
+                    {
+                        new
+                        {
+                            name = CommunicationTwinRewriteToolName,
+                            description = "Rewrites a suggested response into the operating user's voice using communication twin context.",
+                            inputSchema = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    sourceKind = new { type = "string", @enum = new[] { "Query", "Message" } },
+                                    sourceText = new { type = "string" },
+                                    suggestedResponse = new { type = "string" },
+                                    supportingEvidence = new { type = "array", items = new { type = "string" } },
+                                    stream = new { type = "boolean" },
+                                },
+                                required = new[] { "sourceText", "suggestedResponse" }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        if (string.Equals(method, "tools/call", StringComparison.Ordinal))
+        {
+            if (!TryGetToolCallArguments(root, out string? toolName, out JsonElement argumentsElement) ||
+                !string.Equals(toolName, CommunicationTwinRewriteToolName, StringComparison.Ordinal))
+            {
+                return Results.Json(new
+                {
+                    jsonrpc = "2.0",
+                    id,
+                    error = new { code = -32602, message = "Invalid tool name" }
+                });
+            }
+
+            if (!TryBuildRewriteRequestFromJson(argumentsElement, out CommunicationTwinRewriteRequest? rewriteRequest))
+            {
+                return Results.Json(new
+                {
+                    jsonrpc = "2.0",
+                    id,
+                    error = new { code = -32602, message = "Invalid rewrite arguments." }
+                });
+            }
+
+            if (!TryValidateRewriteRequest(rewriteRequest, out string? validationError))
+            {
+                return Results.Json(new
+                {
+                    jsonrpc = "2.0",
+                    id,
+                    error = new { code = -32602, message = validationError ?? "Invalid rewrite arguments." }
+                });
+            }
+
+            bool stream = TryGetBoolean(argumentsElement, "stream");
+            if (stream)
+            {
+                (string operationId, var writer) = streamStore.Create();
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await writer.WriteAsync(JsonSerializer.Serialize(new { phase = "started", operationId }), cancellationToken);
+                        CommunicationTwinProfile streamProfile = communicationTwinService.GetInitialProfile();
+                        string? streamSkillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+                        string streamRewritten = await copilotReplyDraftingService.RewriteInUserVoiceAsync(
+                            rewriteRequest!,
+                            streamProfile,
+                            streamSkillContent,
+                            cancellationToken);
+
+                        foreach (string chunk in ChunkText(streamRewritten, 180))
+                        {
+                            await writer.WriteAsync(JsonSerializer.Serialize(new { phase = "chunk", text = chunk }), cancellationToken);
+                        }
+
+                        await writer.WriteAsync(JsonSerializer.Serialize(new
+                        {
+                            phase = "completed",
+                            rewrittenResponse = streamRewritten,
+                            ownerDisplayName = streamProfile.OwnerDisplayName,
+                            tone = streamProfile.Tone
+                        }), cancellationToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        await writer.WriteAsync(JsonSerializer.Serialize(new
+                        {
+                            phase = "error",
+                            message = ex.Message
+                        }), cancellationToken);
+                    }
+                    finally
+                    {
+                        writer.TryComplete();
+                    }
+                }, cancellationToken);
+
+                return Results.Json(new
+                {
+                    jsonrpc = "2.0",
+                    id,
+                    result = new
+                    {
+                        content = new object[]
+                        {
+                            new { type = "text", text = $"Streaming rewrite started. operationId={operationId}" }
+                        },
+                        structuredContent = new
+                        {
+                            operationId,
+                            streamUrl = $"/api/mcp/stream/{operationId}"
+                        }
+                    }
+                });
+            }
+
+            CommunicationTwinProfile profile = communicationTwinService.GetInitialProfile();
+            string? communicationTwinSkillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+            string rewrittenResponse = await copilotReplyDraftingService.RewriteInUserVoiceAsync(
+                rewriteRequest!,
+                profile,
+                communicationTwinSkillContent,
+                cancellationToken);
+
+            return Results.Json(new
+            {
+                jsonrpc = "2.0",
+                id,
+                result = new
+                {
+                    content = new object[]
+                    {
+                        new { type = "text", text = rewrittenResponse }
+                    },
+                    structuredContent = new
+                    {
+                        rewrittenResponse,
+                        ownerDisplayName = profile.OwnerDisplayName,
+                        tone = profile.Tone
+                    }
+                }
+            });
+        }
+
+        return Results.Json(new
+        {
+            jsonrpc = "2.0",
+            id,
+            error = new { code = -32601, message = "Method not found" }
+        });
+    }
+});
+
+app.MapGet("/api/mcp/stream/{operationId}", async (
+    HttpContext context,
+    string operationId,
+    CommunicationTwinMcpStreamStore streamStore,
+    CancellationToken cancellationToken) =>
+{
+    if (!streamStore.TryGetReader(operationId, out var reader) || reader is null)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        await context.Response.WriteAsync("operation_not_found", cancellationToken);
+        return;
+    }
+
+    context.Response.Headers.Append("Cache-Control", "no-cache");
+    context.Response.Headers.Append("Connection", "keep-alive");
+    context.Response.Headers.Append("Content-Type", "text/event-stream");
+
+    await context.Response.WriteAsync("event: ready\ndata: {\"status\":\"connected\"}\n\n", cancellationToken);
+    await context.Response.Body.FlushAsync(cancellationToken);
+
+    try
+    {
+        await foreach (string payload in reader.ReadAllAsync(cancellationToken))
+        {
+            await context.Response.WriteAsync($"event: message\ndata: {payload}\n\n", cancellationToken);
+            await context.Response.Body.FlushAsync(cancellationToken);
+        }
+    }
+    finally
+    {
+        streamStore.Remove(operationId);
+    }
+});
 
 app.MapGet("/api/audit/forwards", async (
     HttpRequest request,
@@ -1133,6 +1389,76 @@ static string StripHtml(string? content)
     }
 
     return Regex.Replace(content, "<.*?>", string.Empty).Trim();
+}
+
+static object? GetJsonRpcId(JsonElement root)
+{
+    if (!root.TryGetProperty("id", out JsonElement idElement))
+    {
+        return null;
+    }
+
+    return idElement.ValueKind switch
+    {
+        JsonValueKind.String => idElement.GetString(),
+        JsonValueKind.Number when idElement.TryGetInt64(out long idLong) => idLong,
+        JsonValueKind.Number => idElement.GetDouble(),
+        _ => null,
+    };
+}
+
+static bool TryGetToolCallArguments(JsonElement root, out string? toolName, out JsonElement argumentsElement)
+{
+    toolName = null;
+    argumentsElement = default;
+
+    if (!root.TryGetProperty("params", out JsonElement paramsElement) ||
+        paramsElement.ValueKind != JsonValueKind.Object)
+    {
+        return false;
+    }
+
+    if (!paramsElement.TryGetProperty("name", out JsonElement nameElement) ||
+        nameElement.ValueKind != JsonValueKind.String)
+    {
+        return false;
+    }
+
+    if (!paramsElement.TryGetProperty("arguments", out JsonElement argsElement) ||
+        argsElement.ValueKind != JsonValueKind.Object)
+    {
+        return false;
+    }
+
+    toolName = nameElement.GetString();
+    argumentsElement = argsElement;
+    return true;
+}
+
+static bool TryGetBoolean(JsonElement root, string propertyName)
+{
+    if (!root.TryGetProperty(propertyName, out JsonElement value) ||
+        value.ValueKind != JsonValueKind.True &&
+        value.ValueKind != JsonValueKind.False)
+    {
+        return false;
+    }
+
+    return value.GetBoolean();
+}
+
+static IEnumerable<string> ChunkText(string text, int chunkSize)
+{
+    if (string.IsNullOrEmpty(text) || chunkSize <= 0)
+    {
+        yield break;
+    }
+
+    for (int i = 0; i < text.Length; i += chunkSize)
+    {
+        int length = Math.Min(chunkSize, text.Length - i);
+        yield return text.Substring(i, length);
+    }
 }
 
 static string? FirstNonEmpty(params string?[] values)

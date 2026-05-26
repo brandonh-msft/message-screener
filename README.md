@@ -308,6 +308,8 @@ Copilot runtime readiness is also available through:
 - `POST /api/voice/rewrite`
 - `POST /api/skills/communication-twin/messages`
 - `GET /manifest/message-screener-communication-twin-skill-1.0.json`
+- `POST /api/mcp`
+- `GET /api/mcp/stream/{operationId}`
 
 This endpoint uses the same `X-MessageScreener-Owner-Key` header and returns:
 
@@ -342,6 +344,8 @@ For Copilot Studio skill registration, use:
 
 - Manifest URL: `https://<your-host>/manifest/message-screener-communication-twin-skill-1.0.json`
 - Skill endpoint: `https://<your-host>/api/skills/communication-twin/messages`
+
+The MCP surface exposes the same rewrite capability through tool `communication_twin_rewrite` on `POST /api/mcp`. For streamable responses, pass `"stream": true` in tool arguments and subscribe to `GET /api/mcp/stream/{operationId}`.
 
 Copilot Studio skill validation prerequisites:
 
