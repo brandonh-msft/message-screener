@@ -22,6 +22,7 @@ Keep developer-facing AI assets separate from deployed runtime AI assets:
 
 - Developer guidance: `.github/`, `.digital-twin/`
 - Runtime assets shipped with app: `src/MessageScreener.Api/copilot-config/`
+- Documented solutions: `docs/solutions/` (searchable past fixes and guidance, organized by category with YAML frontmatter)
 
 ## Setup commands
 

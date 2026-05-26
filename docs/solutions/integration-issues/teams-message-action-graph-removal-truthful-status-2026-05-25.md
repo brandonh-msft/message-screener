@@ -6,6 +6,7 @@ module: message-action-forwarding
 component: teams-review-delivery
 status: resolved
 date: 2026-05-25
+last_updated: 2026-05-26
 tags:
   - teams
   - compose-extension
@@ -83,6 +84,8 @@ The active runtime now uses a single, coherent delivery model: Teams action invo
 ## Related References
 - Existing related solution (moderate overlap):
   - `docs/solutions/integration-issues/automatic-dm-screening-requires-tenant-admin-graph-consent-2026-05-24.md`
+- Companion follow-up:
+  - `docs/solutions/integration-issues/teams-message-action-forwarding-invoke-cancellation-background-worker-2026-05-26.md`
 - Commits:
   - `7dee1bc` Remove Graph SDK from Teams review delivery path
   - `0527c34` Align Teams action flow with truthful delivery status and remove Graph-named artifacts
