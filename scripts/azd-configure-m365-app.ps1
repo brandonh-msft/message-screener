@@ -67,12 +67,9 @@ function New-M365App {
     param([string]$ReplyUrl)
     
     Write-Status "Creating M365 app registration: $appDisplayName"
-    
-    # Create app with web platform and required scopes
-    $app = az ad app create `
-        --display-name $appDisplayName `
-        --web-redirect-uris $ReplyUrl `
-        --required-resource-accesses @"
+
+    $requiredResourceAccessFile = Join-Path $env:TEMP ("message-screener-required-resource-accesses-{0}.json" -f [guid]::NewGuid().ToString("N"))
+    @"
 [
   {
     "resourceAppId": "00000003-0000-0000-c000-000000000000",
@@ -84,7 +81,18 @@ function New-M365App {
     ]
   }
 ]
-"@ 2>&1 | ConvertFrom-Json -ErrorAction Stop
+"@ | Set-Content -Path $requiredResourceAccessFile -Encoding utf8
+
+    try {
+        # Create app with web platform and required scopes
+        $app = az ad app create `
+            --display-name $appDisplayName `
+            --web-redirect-uris $ReplyUrl `
+            --required-resource-accesses "@$requiredResourceAccessFile" 2>&1 | ConvertFrom-Json -ErrorAction Stop
+    }
+    finally {
+        Remove-Item -Path $requiredResourceAccessFile -Force -ErrorAction SilentlyContinue
+    }
     
     if (-not $app -or -not $app.appId) {
         throw "Failed to create app registration."
@@ -102,10 +110,8 @@ function Update-M365AppConfig {
 
     Write-Status "Updating app redirect URI and delegated scopes (Mail.Read no-admin profile)."
 
-    $updateResult = & az ad app update `
-        --id $AppId `
-        --web-redirect-uris $ReplyUrl `
-        --required-resource-accesses @"
+    $requiredResourceAccessFile = Join-Path $env:TEMP ("message-screener-required-resource-accesses-{0}.json" -f [guid]::NewGuid().ToString("N"))
+    @"
 [
   {
     "resourceAppId": "00000003-0000-0000-c000-000000000000",
@@ -117,8 +123,18 @@ function Update-M365AppConfig {
     ]
   }
 ]
-"@ `
-        --only-show-errors 2>&1
+"@ | Set-Content -Path $requiredResourceAccessFile -Encoding utf8
+
+    try {
+        $updateResult = & az ad app update `
+            --id $AppId `
+            --web-redirect-uris $ReplyUrl `
+            --required-resource-accesses "@$requiredResourceAccessFile" `
+            --only-show-errors 2>&1
+    }
+    finally {
+        Remove-Item -Path $requiredResourceAccessFile -Force -ErrorAction SilentlyContinue
+    }
 
     if ($LASTEXITCODE -ne 0) {
         $errorText = ($updateResult | Out-String).Trim()
