@@ -656,11 +656,6 @@ static object CreateComposeExtensionStatus(string text)
 {
     return new
     {
-        task = new
-        {
-            type = "message",
-            value = text,
-        },
         composeExtension = new
         {
             type = "message",

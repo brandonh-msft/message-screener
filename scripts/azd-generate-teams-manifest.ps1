@@ -80,7 +80,7 @@ function New-TeamsManifest {
                         title = 'Forward to Message Screener'
                         description = 'Forward this message to Message Screener for review and draft generation.'
                         context = @('message')
-                        fetchTask = $true
+                        fetchTask = $false
                     }
                 )
             }
