@@ -155,7 +155,7 @@ Deployment is expected to run through Azure Developer CLI (`azd`).
 pwsh ./scripts/azd-generate-teams-manifest.ps1
 ```
 
-This single script resolves azd environment values and generates the Teams manifest directly.
+This single script resolves azd environment values, increments the repo-root `.manifest-version` build counter, and generates the Teams manifest directly.
 
 The generated manifest includes a Teams message action command (`Forward to Message Screener`) so users can invoke screening from message Actions in 1:1 and group chats.
 
@@ -211,6 +211,7 @@ When required environment values are present, the hook generates:
 
 - `dist/<env>/teamsapp/manifest.json`
 - `dist/<env>/message-screener-teamsapp.zip`
+- `.manifest-version` is updated at the repo root so the next build uses the next app version.
 
 After `azd up`, import the generated zip package into Teams for testing:
 

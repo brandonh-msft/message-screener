@@ -11,6 +11,8 @@ function New-TeamsManifest {
         [string]$TeamsAppId,
         [Parameter(Mandatory = $true)]
         [string]$BotId,
+        [Parameter(Mandatory = $true)]
+        [long]$BuildNumber,
         [string]$AppName = 'Message Screen',
         [string]$DeveloperName = 'Brandon Hurlburt',
         [string]$WebsiteUrl = 'https://github.com',
@@ -29,7 +31,7 @@ function New-TeamsManifest {
     $manifest = [ordered]@{
         '$schema' = 'https://developer.microsoft.com/json-schemas/teams/v1.20/MicrosoftTeams.schema.json'
         manifestVersion = '1.20'
-        version = '1.0.0'
+        version = "1.0.$BuildNumber"
         id = $TeamsAppId
         developer = [ordered]@{
             name = $DeveloperName
@@ -101,6 +103,45 @@ function New-TeamsManifest {
     Write-Host 'Packaging will include img/color.png and img/outline.png.'
 
     return $manifestPath
+}
+
+function Get-ManifestVersionFilePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    return Join-Path $RepoRoot '.manifest-version'
+}
+
+function Get-NextManifestBuildNumber {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$VersionFilePath
+    )
+
+    [long]$currentBuildNumber = 0
+    if (Test-Path $VersionFilePath) {
+        $rawValue = (Get-Content -Path $VersionFilePath -Raw).Trim()
+        if (-not [string]::IsNullOrWhiteSpace($rawValue)) {
+            if (-not [long]::TryParse($rawValue, [ref]$currentBuildNumber) -or $currentBuildNumber -lt 0) {
+                throw "Invalid manifest build number in $VersionFilePath. Expected a non-negative integer."
+            }
+        }
+    }
+
+    return $currentBuildNumber + 1
+}
+
+function Set-ManifestBuildNumber {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$VersionFilePath,
+        [Parameter(Mandatory = $true)]
+        [long]$BuildNumber
+    )
+
+    Set-Content -Path $VersionFilePath -Value $BuildNumber -Encoding utf8
 }
 
 function New-TeamsAppPackage {
@@ -256,11 +297,15 @@ if ([string]::IsNullOrWhiteSpace($baseUrl) -or [string]::IsNullOrWhiteSpace($tea
 }
 
 $outputDirectory = Join-Path $repoRoot "dist/$envName"
+$manifestVersionFilePath = Get-ManifestVersionFilePath -RepoRoot $repoRoot
+$buildNumber = Get-NextManifestBuildNumber -VersionFilePath $manifestVersionFilePath
+
 $manifestPath = New-TeamsManifest `
     -OutputDirectory $outputDirectory `
     -BaseUrl $baseUrl `
     -TeamsAppId $teamsAppId `
-    -BotId $botId
+    -BotId $botId `
+    -BuildNumber $buildNumber
 
 $colorIconPath = Join-Path $repoRoot 'img/color.png'
 $outlineIconPath = Join-Path $repoRoot 'img/outline.png'
@@ -271,6 +316,8 @@ $packagePath = New-TeamsAppPackage `
     -ColorIconPath $colorIconPath `
     -OutlineIconPath $outlineIconPath `
     -PackageName 'message-screener-teamsapp.zip'
+
+Set-ManifestBuildNumber -VersionFilePath $manifestVersionFilePath -BuildNumber $buildNumber
 
 Write-Host "Teams manifest generation completed for azd environment '$envName'."
 Write-Host "Teams app package location: $packagePath"
