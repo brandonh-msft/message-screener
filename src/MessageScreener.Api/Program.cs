@@ -47,6 +47,9 @@ builder.Services.AddSingleton<ICallerAutoResponseComposer, CallerAutoResponseCom
 builder.Services.AddSingleton<IGhcpAgentHarness, GhcpAgentHarness>();
 builder.Services.AddSingleton<IPersonalReviewConversationRegistry, KeyVaultPersonalReviewConversationRegistry>();
 builder.Services.AddSingleton<IPersonalReviewConversationBootstrapper, PersonalReviewConversationBootstrapper>();
+builder.Services.AddSingleton<IForwardActionQueue, ForwardActionQueue>();
+builder.Services.AddScoped<IForwardActionProcessor, ForwardActionProcessor>();
+builder.Services.AddHostedService<ForwardActionBackgroundService>();
 builder.Services.AddScoped<ITeamsMessageClient, BotConnectorMessageClient>();
 builder.Services.AddScoped<IReviewDeliveryService, ReviewDeliveryService>();
 builder.Services.AddHttpClient();
@@ -189,13 +192,8 @@ app.MapPost("/api/messages", async (
     HttpRequest request,
     IHttpClientFactory httpClientFactory,
     IOptions<MessageScreenerTeamsOptions> teamsOptions,
-    IMessageIntakeService intakeService,
-    IForwardAuditStore forwardAuditStore,
+    IForwardActionQueue forwardActionQueue,
     IPersonalReviewConversationRegistry personalReviewConversationRegistry,
-    IPersonalReviewConversationBootstrapper personalReviewConversationBootstrapper,
-    ICommunicationTwinService communicationTwinService,
-    ICallerAutoResponseComposer callerAutoResponseComposer,
-    IReviewDeliveryService reviewDeliveryService,
     ILoggerFactory loggerFactory,
     CancellationToken cancellationToken) =>
 {
@@ -246,33 +244,25 @@ app.MapPost("/api/messages", async (
 
         try
         {
-            if (!string.IsNullOrWhiteSpace(serviceUrl) &&
+            ForwardActionBootstrapContext? bootstrapContext =
+                !string.IsNullOrWhiteSpace(serviceUrl) &&
                 !string.IsNullOrWhiteSpace(forwardedRequest.TenantId) &&
                 !string.IsNullOrWhiteSpace(fromId) &&
-                !string.IsNullOrWhiteSpace(botId))
-            {
-                await personalReviewConversationBootstrapper.EnsureConversationAsync(
-                    serviceUrl,
-                    forwardedRequest.TenantId,
-                    fromId,
-                    fromDisplayName ?? "Message Screener user",
-                    botId,
-                    cancellationToken);
-            }
+                !string.IsNullOrWhiteSpace(botId)
+                    ? new ForwardActionBootstrapContext(
+                        serviceUrl,
+                        forwardedRequest.TenantId,
+                        fromId,
+                        fromDisplayName ?? "Message Screener user",
+                        botId)
+                    : null;
 
-            InboundProcessingOutcome processingOutcome = await ProcessInboundMessageAsync(
-                forwardedMessage,
-                intakeService,
-                forwardAuditStore,
-                communicationTwinService,
-                callerAutoResponseComposer,
-                reviewDeliveryService,
-                logger,
+            await forwardActionQueue.EnqueueAsync(
+                new ForwardActionWorkItem(forwardedMessage, bootstrapContext),
                 cancellationToken);
 
-            string statusText = CreateComposeExtensionStatusText(processingOutcome);
-
-            return Results.Ok(CreateComposeExtensionStatus(statusText));
+            return Results.Ok(CreateComposeExtensionStatus(
+                "Message forwarded. I’ll post the draft in your personal Message Screener chat."));
         }
         catch (Exception ex)
         {
@@ -688,38 +678,3 @@ static string? FirstNonEmpty(params string?[] values)
 
     return null;
 }
-
-static string CreateComposeExtensionStatusText(InboundProcessingOutcome outcome)
-{
-    MessageIntakeResult intakeResult = outcome.IntakeResult;
-    ReviewDeliveryResult deliveryResult = outcome.ReviewDeliveryResult;
-
-    if (intakeResult.ProcessingState == MessageProcessingState.DuplicateInFlight)
-    {
-        return "Message is already being processed by Message Screener.";
-    }
-
-    if (intakeResult.ProcessingState == MessageProcessingState.DuplicateCompleted)
-    {
-        return "Message was already forwarded to Message Screener.";
-    }
-
-    if (!intakeResult.Trigger.ShouldCreateReview)
-    {
-        return "Message was received but did not meet screening criteria.";
-    }
-
-    return deliveryResult.Status switch
-    {
-        ReviewDeliveryStatus.Delivered => "Message forwarded to Message Screener.",
-        ReviewDeliveryStatus.SkippedAutoReplyDisabled => "Forward received, but automatic review delivery is disabled.",
-        ReviewDeliveryStatus.SkippedMissingConversationId => "Forward received, but Message Screener could not open the personal review chat automatically. Please retry from the message action.",
-        ReviewDeliveryStatus.SkippedMissingServiceUrl => "Forward received, but Message Screener could not open the personal review chat automatically. Please retry from the message action.",
-        ReviewDeliveryStatus.FailedToDeliver => "Forward received, but delivery to Message Screener failed. Please retry from message actions.",
-        _ => "Forward received.",
-    };
-}
-
-sealed record InboundProcessingOutcome(
-    MessageIntakeResult IntakeResult,
-    ReviewDeliveryResult ReviewDeliveryResult);

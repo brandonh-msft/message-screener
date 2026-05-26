@@ -272,13 +272,13 @@ Runtime review delivery also requires a personal screener destination conversati
 - `MessageScreener__Teams__PersonalReviewConversationId`
 - `MessageScreener__Teams__KeyVaultUri` (used to persist the first created personal review conversation)
 
-For first-run testing, you do not need to set the personal review conversation id before `azd up`. The first forwarded message creates the personal review chat automatically and the service persists it for later use.
+For first-run testing, you do not need to set the personal review conversation id before `azd up`. The first forwarded message is queued, then the service creates the personal review chat and persists it for later use.
 
 Immediate use flow after install:
 
 1. In a supported Teams message, click `Forward to Message Screener` from message actions.
-2. Review the generated draft reply in the personal Message Screener chat.
-3. Send it manually when ready.
+2. Wait for the draft to land in the personal Message Screener chat.
+3. Review and send it manually when ready.
 
 If you want to pin the destination up front instead of waiting for the first bootstrap, set it explicitly and redeploy:
 
