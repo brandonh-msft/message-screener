@@ -297,6 +297,9 @@ When configured, recent forward audit entries are available from `GET /api/audit
 Copilot runtime readiness is also available through:
 
 - `GET /api/readiness/copilot`
+- `POST /api/voice/rewrite`
+- `POST /api/skills/communication-twin/messages`
+- `GET /manifest/message-screener-communication-twin-skill-1.0.json`
 
 This endpoint uses the same `X-MessageScreener-Owner-Key` header and returns:
 
@@ -310,6 +313,27 @@ Readiness checks include:
 3. MCP servers are discovered and at least one is connected.
 4. Skills are loaded and at least one `message-screener` skill is enabled.
 5. A live Copilot draft probe succeeds.
+
+The voice rewrite endpoint accepts:
+
+```json
+{
+  "sourceKind": "Query",
+  "sourceText": "Can you share an update by Friday?",
+  "suggestedResponse": "Yes, I will send an update by Friday.",
+  "supportingEvidence": [
+    "Current status report is ready for review.",
+    "Stakeholder requested summary by end of week."
+  ]
+}
+```
+
+The skill endpoint (`/api/skills/communication-twin/messages`) accepts the same payload directly, or inside Bot Framework activity `value`.
+
+For Copilot Studio skill registration, use:
+
+- Manifest URL: `https://<your-host>/manifest/message-screener-communication-twin-skill-1.0.json`
+- Skill endpoint: `https://<your-host>/api/skills/communication-twin/messages`
 
 `MESSAGE_SCREENER_TEAMS_BOT_ID` is produced by infra deployment from the managed identity client ID and does not need to be set manually.
 

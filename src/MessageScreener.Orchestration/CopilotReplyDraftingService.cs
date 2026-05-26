@@ -42,6 +42,12 @@ public interface ICopilotReplyDraftingService
         CommunicationTwinProfile profile,
         string? communicationTwinSkillContent,
         CancellationToken cancellationToken);
+
+    ValueTask<string> RewriteInUserVoiceAsync(
+        CommunicationTwinRewriteRequest request,
+        CommunicationTwinProfile profile,
+        string? communicationTwinSkillContent,
+        CancellationToken cancellationToken);
 }
 
 public sealed record CopilotDraftProbeResult(bool Success, string DraftReply, string ReasonCode);
@@ -133,6 +139,62 @@ public sealed class CopilotReplyDraftingService(
         }
     }
 
+    public async ValueTask<string> RewriteInUserVoiceAsync(
+        CommunicationTwinRewriteRequest request,
+        CommunicationTwinProfile profile,
+        string? communicationTwinSkillContent,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string systemPrompt = LoadSystemPrompt(options.Value.SystemPromptPath);
+        string userPrompt = BuildRewriteUserPrompt(request, profile, communicationTwinSkillContent);
+        string configDirectory = ResolvePath(options.Value.ConfigDirectory);
+        List<string> skillDirectories = ResolveSkillDirectories(options.Value.SkillDirectories);
+
+        try
+        {
+            await using CopilotClient client = new();
+            await using CopilotSession session = await client.CreateSessionAsync(new SessionConfig
+            {
+                OnPermissionRequest = PermissionHandler.ApproveAll,
+                Model = options.Value.Model,
+                Agent = options.Value.Agent,
+                GitHubToken = options.Value.GitHubToken,
+                EnableConfigDiscovery = options.Value.EnableConfigDiscovery,
+                ConfigDir = configDirectory,
+                SkillDirectories = skillDirectories,
+                SystemMessage = new SystemMessageConfig
+                {
+                    Mode = SystemMessageMode.Replace,
+                    Content = systemPrompt,
+                },
+            }, cancellationToken);
+
+            var response = await session.SendAndWaitAsync(
+                new MessageOptions
+                {
+                    Prompt = userPrompt,
+                    Mode = options.Value.MessageMode,
+                },
+                TimeSpan.FromSeconds(Math.Max(5, options.Value.ResponseTimeoutSeconds)),
+                cancellationToken);
+
+            if (response is null || string.IsNullOrWhiteSpace(response.Data?.Content))
+            {
+                CopilotHarnessLog.RewriteFallbackSuggestedResponse(logger);
+                return request.SuggestedResponse.Trim();
+            }
+
+            return response.Data.Content.Trim();
+        }
+        catch (Exception ex)
+        {
+            CopilotHarnessLog.RewriteFailed(logger, ex.Message);
+            return request.SuggestedResponse.Trim();
+        }
+    }
+
     private static string LoadSystemPrompt(string configuredPath)
     {
         string resolvedPath = ResolvePath(configuredPath);
@@ -177,6 +239,59 @@ public sealed class CopilotReplyDraftingService(
         builder.AppendLine("2) Produce a practical, personalized draft reply in the operating user's voice.");
         builder.AppendLine("3) Keep it concise and professional.");
         builder.AppendLine("4) Return only the draft reply text.");
+
+        return builder.ToString();
+    }
+
+    private static string BuildRewriteUserPrompt(
+        CommunicationTwinRewriteRequest request,
+        CommunicationTwinProfile profile,
+        string? communicationTwinSkillContent)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Rewrite the suggested response so it sounds like the operating user while preserving facts and intent.");
+        builder.AppendLine();
+        builder.AppendLine("Operating user profile:");
+        builder.AppendLine($"- owner_display_name: {profile.OwnerDisplayName}");
+        builder.AppendLine($"- tone: {profile.Tone}");
+        builder.AppendLine($"- persona_summary: {profile.PersonaSummary}");
+        builder.AppendLine($"- preferred_phrases: {string.Join(", ", profile.PreferredPhrases)}");
+        builder.AppendLine($"- avoid_phrases: {string.Join(", ", profile.AvoidPhrases)}");
+        builder.AppendLine();
+
+        if (!string.IsNullOrWhiteSpace(communicationTwinSkillContent))
+        {
+            builder.AppendLine("Communication twin skill content:");
+            builder.AppendLine(communicationTwinSkillContent);
+            builder.AppendLine();
+        }
+
+        builder.AppendLine("Inbound context:");
+        builder.AppendLine($"- source_kind: {request.SourceKind}");
+        builder.AppendLine($"- source_text: {request.SourceText}");
+        builder.AppendLine();
+        builder.AppendLine("Supporting evidence:");
+        if (request.SupportingEvidence.Length == 0)
+        {
+            builder.AppendLine("- none provided");
+        }
+        else
+        {
+            foreach (string evidence in request.SupportingEvidence)
+            {
+                builder.AppendLine($"- {evidence}");
+            }
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("Suggested response to rewrite:");
+        builder.AppendLine(request.SuggestedResponse);
+        builder.AppendLine();
+        builder.AppendLine("Requirements:");
+        builder.AppendLine("1) Keep the same meaning and factual claims as the suggested response.");
+        builder.AppendLine("2) Align wording to the operating user's voice.");
+        builder.AppendLine("3) Keep it concise and professional.");
+        builder.AppendLine("4) Return only the rewritten response text.");
 
         return builder.ToString();
     }

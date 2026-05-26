@@ -65,6 +65,23 @@ namespace MessageScreener.Contracts
         string[] AvoidPhrases,
         string Tone);
 
+    public enum RewriteSourceKind
+    {
+        Query = 0,
+        Message = 1,
+    }
+
+    public sealed record CommunicationTwinRewriteRequest(
+        RewriteSourceKind SourceKind,
+        string SourceText,
+        string SuggestedResponse,
+        string[] SupportingEvidence);
+
+    public sealed record CommunicationTwinRewriteResponse(
+        string RewrittenResponse,
+        string OwnerDisplayName,
+        string Tone);
+
     public sealed record McpServerRegistration(
         string ServerName,
         string Description,

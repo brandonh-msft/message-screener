@@ -19,6 +19,7 @@ using OpenTelemetry.Trace;
 const string ServiceName = "MessageScreener.Api";
 const string ServiceVersion = "0.1.0";
 const string ForwardMessageActionCommandId = "forwardToMessageScreener";
+const string RewriteInUserVoiceSkillActivityId = "rewriteInUserVoice";
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -148,6 +149,87 @@ app.MapGet("/api/readiness/copilot", async (
     }
 
     return Results.Json(report, statusCode: StatusCodes.Status503ServiceUnavailable);
+});
+
+app.MapPost("/api/voice/rewrite", async (
+    HttpRequest request,
+    ICopilotReplyDraftingService copilotReplyDraftingService,
+    ICommunicationTwinService communicationTwinService,
+    IGhcpAgentHarness ghcpAgentHarness,
+    CancellationToken cancellationToken) =>
+{
+    return await RewriteInUserVoiceAsync(
+        request,
+        copilotReplyDraftingService,
+        communicationTwinService,
+        ghcpAgentHarness,
+        cancellationToken);
+});
+
+app.MapPost("/api/skills/communication-twin/messages", async (
+    HttpRequest request,
+    ICopilotReplyDraftingService copilotReplyDraftingService,
+    ICommunicationTwinService communicationTwinService,
+    IGhcpAgentHarness ghcpAgentHarness,
+    CancellationToken cancellationToken) =>
+{
+    return await RewriteInUserVoiceAsync(
+        request,
+        copilotReplyDraftingService,
+        communicationTwinService,
+        ghcpAgentHarness,
+        cancellationToken);
+});
+
+app.MapGet("/manifest/message-screener-communication-twin-skill-1.0.json", (
+    HttpRequest request,
+    IOptions<MessageScreenerTeamsOptions> teamsOptions) =>
+{
+    string? appId = teamsOptions.Value.ManagedIdentityClientId;
+    if (string.IsNullOrWhiteSpace(appId))
+    {
+        return Results.Problem(
+            title: "Skill manifest is unavailable",
+            detail: "Configure MessageScreener:Teams:ManagedIdentityClientId to expose a valid Copilot Studio skill manifest.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    string baseUrl = $"{request.Scheme}://{request.Host}".TrimEnd('/');
+    string endpointUrl = $"{baseUrl}/api/skills/communication-twin/messages";
+
+    Dictionary<string, object?> manifest = new()
+    {
+        ["$schema"] = "https://schemas.botframework.com/schemas/skills/skill-manifest-2.0.0.json",
+        ["$id"] = "MessageScreenerCommunicationTwinSkill",
+        ["name"] = "Message Screener Communication Twin Skill",
+        ["version"] = "1.0",
+        ["description"] = "Rewrites a suggested response into the operating user's voice using the communication twin profile.",
+        ["publisherName"] = "Message Screener",
+        ["privacyUrl"] = $"{baseUrl}/privacy",
+        ["license"] = "",
+        ["msaAppId"] = appId,
+        ["endpoints"] = new object[]
+        {
+            new Dictionary<string, object?>
+            {
+                ["name"] = "default",
+                ["protocol"] = "BotFrameworkV3",
+                ["description"] = "Skill endpoint for Communication Twin rewrite actions",
+                ["endpointUrl"] = endpointUrl,
+                ["msAppId"] = appId,
+            }
+        },
+        ["activities"] = new Dictionary<string, object?>
+        {
+            [RewriteInUserVoiceSkillActivityId] = new Dictionary<string, object?>
+            {
+                ["type"] = "event",
+                ["description"] = "Rewrite suggested response in the operating user's voice. Send rewrite payload in activity.value.",
+            }
+        }
+    };
+
+    return Results.Json(manifest);
 });
 
 app.MapPost("/api/intake/forward", async (
@@ -381,6 +463,236 @@ static async ValueTask<InboundProcessingOutcome> ProcessInboundMessageAsync(
         await intakeService.ResetAsync(intakeResult, cancellationToken);
         throw;
     }
+}
+
+static async ValueTask<IResult> RewriteInUserVoiceAsync(
+    HttpRequest request,
+    ICopilotReplyDraftingService copilotReplyDraftingService,
+    ICommunicationTwinService communicationTwinService,
+    IGhcpAgentHarness ghcpAgentHarness,
+    CancellationToken cancellationToken)
+{
+    JsonDocument payload;
+    try
+    {
+        payload = await JsonDocument.ParseAsync(request.Body, cancellationToken: cancellationToken);
+    }
+    catch (JsonException)
+    {
+        return Results.BadRequest(new
+        {
+            error = "invalid_json",
+            detail = "Provide a valid JSON payload with sourceKind, sourceText, suggestedResponse, and supportingEvidence."
+        });
+    }
+
+    using (payload)
+    {
+        if (!TryParseCommunicationTwinRewriteRequest(payload.RootElement, out CommunicationTwinRewriteRequest? rewriteRequest))
+        {
+            return Results.BadRequest(new
+            {
+                error = "invalid_rewrite_request",
+                detail = "Provide sourceKind, sourceText, suggestedResponse, and supportingEvidence (array)."
+            });
+        }
+
+        if (!TryValidateRewriteRequest(rewriteRequest, out string? validationError))
+        {
+            return Results.BadRequest(new
+            {
+                error = "invalid_rewrite_request",
+                detail = validationError
+            });
+        }
+
+        CommunicationTwinProfile profile = communicationTwinService.GetInitialProfile();
+        string? communicationTwinSkillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+        string rewrittenResponse = await copilotReplyDraftingService.RewriteInUserVoiceAsync(
+            rewriteRequest!,
+            profile,
+            communicationTwinSkillContent,
+            cancellationToken);
+
+        return Results.Ok(new CommunicationTwinRewriteResponse(
+            RewrittenResponse: rewrittenResponse,
+            OwnerDisplayName: profile.OwnerDisplayName,
+            Tone: profile.Tone));
+    }
+}
+
+static bool TryValidateRewriteRequest(CommunicationTwinRewriteRequest? request, out string? validationError)
+{
+    validationError = null;
+    if (request is null)
+    {
+        validationError = "Payload is required.";
+        return false;
+    }
+
+    if (string.IsNullOrWhiteSpace(request.SourceText))
+    {
+        validationError = "sourceText is required.";
+        return false;
+    }
+
+    if (string.IsNullOrWhiteSpace(request.SuggestedResponse))
+    {
+        validationError = "suggestedResponse is required.";
+        return false;
+    }
+
+    if (request.SourceText.Length > 4000)
+    {
+        validationError = "sourceText exceeds 4000 characters.";
+        return false;
+    }
+
+    if (request.SuggestedResponse.Length > 4000)
+    {
+        validationError = "suggestedResponse exceeds 4000 characters.";
+        return false;
+    }
+
+    if (request.SupportingEvidence.Length > 25)
+    {
+        validationError = "supportingEvidence supports up to 25 entries.";
+        return false;
+    }
+
+    if (request.SupportingEvidence.Any(item => item.Length > 2000))
+    {
+        validationError = "Each supportingEvidence entry must be 2000 characters or less.";
+        return false;
+    }
+
+    return true;
+}
+
+static bool TryParseCommunicationTwinRewriteRequest(
+    JsonElement payload,
+    out CommunicationTwinRewriteRequest? request)
+{
+    if (TryBuildRewriteRequestFromJson(payload, out request))
+    {
+        return true;
+    }
+
+    if (payload.ValueKind != JsonValueKind.Object)
+    {
+        request = null;
+        return false;
+    }
+
+    if (payload.TryGetProperty("value", out JsonElement value) &&
+        value.ValueKind == JsonValueKind.Object &&
+        TryBuildRewriteRequestFromJson(value, out request))
+    {
+        return true;
+    }
+
+    if (payload.TryGetProperty("text", out JsonElement text) &&
+        text.ValueKind == JsonValueKind.String)
+    {
+        string? textValue = text.GetString();
+        if (!string.IsNullOrWhiteSpace(textValue))
+        {
+            try
+            {
+                using JsonDocument textJson = JsonDocument.Parse(textValue);
+                if (TryBuildRewriteRequestFromJson(textJson.RootElement, out request))
+                {
+                    return true;
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+    }
+
+    request = null;
+    return false;
+}
+
+static bool TryBuildRewriteRequestFromJson(
+    JsonElement payload,
+    out CommunicationTwinRewriteRequest? request)
+{
+    request = null;
+    if (payload.ValueKind != JsonValueKind.Object)
+    {
+        return false;
+    }
+
+    if (!payload.TryGetProperty("sourceText", out JsonElement sourceTextElement) ||
+        sourceTextElement.ValueKind != JsonValueKind.String)
+    {
+        return false;
+    }
+
+    if (!payload.TryGetProperty("suggestedResponse", out JsonElement suggestedResponseElement) ||
+        suggestedResponseElement.ValueKind != JsonValueKind.String)
+    {
+        return false;
+    }
+
+    RewriteSourceKind sourceKind = RewriteSourceKind.Message;
+    if (payload.TryGetProperty("sourceKind", out JsonElement sourceKindElement))
+    {
+        if (sourceKindElement.ValueKind == JsonValueKind.String)
+        {
+            string? sourceKindRaw = sourceKindElement.GetString();
+            if (!Enum.TryParse<RewriteSourceKind>(sourceKindRaw, true, out sourceKind))
+            {
+                return false;
+            }
+        }
+        else if (sourceKindElement.ValueKind == JsonValueKind.Number)
+        {
+            if (!sourceKindElement.TryGetInt32(out int sourceKindValue) ||
+                !Enum.IsDefined(typeof(RewriteSourceKind), sourceKindValue))
+            {
+                return false;
+            }
+
+            sourceKind = (RewriteSourceKind)sourceKindValue;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    List<string> supportingEvidence = [];
+    if (payload.TryGetProperty("supportingEvidence", out JsonElement evidenceElement))
+    {
+        if (evidenceElement.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        foreach (JsonElement evidenceItem in evidenceElement.EnumerateArray())
+        {
+            if (evidenceItem.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            string evidenceText = evidenceItem.GetString() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(evidenceText))
+            {
+                supportingEvidence.Add(evidenceText.Trim());
+            }
+        }
+    }
+
+    request = new CommunicationTwinRewriteRequest(
+        SourceKind: sourceKind,
+        SourceText: sourceTextElement.GetString()?.Trim() ?? string.Empty,
+        SuggestedResponse: suggestedResponseElement.GetString()?.Trim() ?? string.Empty,
+        SupportingEvidence: supportingEvidence.ToArray());
+    return true;
 }
 
 static ForwardAuditEntry CreateForwardAuditEntry(TeamsInboundMessage message, MessageIntakeResult intakeResult)

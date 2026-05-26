@@ -33,5 +33,17 @@ namespace MessageScreener.Orchestration
             Level = LogLevel.Warning,
             Message = "Copilot reply drafting failed. Falling back to template reply. Error={Error}")]
         public static partial void ReplyDraftFailed(ILogger logger, string error);
+
+        [LoggerMessage(
+            EventId = 1025,
+            Level = LogLevel.Warning,
+            Message = "Copilot rewrite returned empty content. Falling back to suggested response.")]
+        public static partial void RewriteFallbackSuggestedResponse(ILogger logger);
+
+        [LoggerMessage(
+            EventId = 1026,
+            Level = LogLevel.Warning,
+            Message = "Copilot rewrite failed. Falling back to suggested response. Error={Error}")]
+        public static partial void RewriteFailed(ILogger logger, string error);
     }
 }
