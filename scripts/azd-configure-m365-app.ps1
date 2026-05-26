@@ -4,7 +4,7 @@ Registers an M365 OAuth2 app in Entra ID for WorkIQ MCP integration.
 
 .DESCRIPTION
 Automated M365 app registration for Message Screener, run as part of azd postprovision.
-Handles app creation, secret generation, and storage in Key Vault with SFI defaults.
+Handles app creation and secret generation with SFI defaults.
 
 .PARAMETER SkipIfExists
 If true, skips registration if app already exists. Default: $true (safe for re-runs).
@@ -19,8 +19,8 @@ Force re-register even if app exists. Creates new secret in Key Vault.
 Requires:
 - Azure CLI (az)
 - User signed in with sufficient permissions (app registration admin)
-- Azure Key Vault already provisioned
-- azd env variables: AZURE_KEY_VAULT_ENDPOINT, AZURE_ENV_NAME
+- Azure Key Vault is provisioned by infra
+- azd env variable persistence for M365 values
 #>
 
 [CmdletBinding()]
@@ -49,15 +49,6 @@ function Write-Status {
         Error   = "Red"
     }
     Write-Host "[$Level] $Message" -ForegroundColor $colors[$Level]
-}
-
-function Get-KeyVaultUri {
-    $vaultUri = $env:AZURE_KEY_VAULT_ENDPOINT
-    if ([string]::IsNullOrWhiteSpace($vaultUri)) {
-        throw "AZURE_KEY_VAULT_ENDPOINT is not set. Ensure azd provision ran successfully."
-    }
-    # Ensure URI ends without trailing slash for consistency
-    return $vaultUri.TrimEnd('/')
 }
 
 function Get-ExistingApp {
@@ -121,38 +112,26 @@ function New-ClientSecret {
     
     Write-Status "Creating client secret for app: $AppId"
     
-    $secret = az ad app credential reset `
+    $secretPassword = & az ad app credential reset `
         --id $AppId `
         --credential-description "Message Screener WorkIQ Auth" `
-        --years 1 2>&1 | ConvertFrom-Json -ErrorAction Stop
-    
-    if (-not $secret -or -not $secret.password) {
-        throw "Failed to create client secret."
-    }
-    
-    Write-Status "Client secret created." -Level "Success"
-    return $secret
-}
+        --years 1 `
+        --query password `
+        --output tsv `
+        --only-show-errors 2>&1
 
-function Store-SecretInKeyVault {
-    param(
-        [string]$SecretName,
-        [string]$SecretValue,
-        [string]$VaultUri
-    )
-    
-    Write-Status "Storing secret in Key Vault: $SecretName"
-    
-    az keyvault secret set `
-        --vault-name $vaultUri `
-        --name $SecretName `
-        --value $SecretValue 2>&1 | Out-Null
-    
     if ($LASTEXITCODE -ne 0) {
-        throw "Failed to store secret in Key Vault."
+        $errorText = ($secretPassword | Out-String).Trim()
+        throw "Failed to create client secret. Azure CLI returned: $errorText"
     }
-    
-    Write-Status "Secret stored successfully." -Level "Success"
+
+    $secretPasswordText = ($secretPassword | Out-String).Trim()
+    if ([string]::IsNullOrWhiteSpace($secretPasswordText)) {
+        throw "Failed to create client secret. Azure CLI returned an empty password."
+    }
+
+    Write-Status "Client secret created." -Level "Success"
+    return [pscustomobject]@{ password = $secretPasswordText }
 }
 
 function Update-AzdEnvironment {
@@ -167,6 +146,9 @@ function Update-AzdEnvironment {
     azd env set MESSAGE_SCREENER_M365_CLIENT_ID $ClientId 2>&1 | Out-Null
     azd env set MESSAGE_SCREENER_M365_CLIENT_SECRET $ClientSecret 2>&1 | Out-Null
     azd env set MESSAGE_SCREENER_M365_TENANT_ID $TenantId 2>&1 | Out-Null
+    azd env set m365ClientId $ClientId 2>&1 | Out-Null
+    azd env set m365ClientSecret $ClientSecret 2>&1 | Out-Null
+    azd env set m365TenantId $TenantId 2>&1 | Out-Null
     
     Write-Status "Environment variables updated." -Level "Success"
 }
@@ -198,11 +180,6 @@ try {
         throw "Unable to determine tenant ID. Ensure 'az account show' works."
     }
     Write-Status "Tenant ID: $tenantId"
-    
-    # Get Key Vault URI
-    $keyVaultUri = Get-KeyVaultUri
-    $keyVaultName = $keyVaultUri -replace ".*://(.+)\.vault\..*", '$1'
-    Write-Status "Key Vault: $keyVaultName"
     
     # Determine reply URL from azd environment
     $apiBase = $env:MESSAGE_SCREENER_PUBLIC_BASE_URL
@@ -240,10 +217,6 @@ try {
     
     # Create/update client secret
     $secret = New-ClientSecret -AppId $app.appId
-    
-    # Store in Key Vault
-    Store-SecretInKeyVault -SecretName "m365-client-id" -SecretValue $app.appId -VaultUri $keyVaultName
-    Store-SecretInKeyVault -SecretName "m365-client-secret" -SecretValue $secret.password -VaultUri $keyVaultName
     
     # Update azd environment
     Update-AzdEnvironment -ClientId $app.appId -ClientSecret $secret.password -TenantId $tenantId

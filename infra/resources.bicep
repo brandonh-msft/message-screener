@@ -17,6 +17,16 @@ param personalReviewConversationId string = ''
 @description('Optional GitHub token used by GitHub Copilot SDK runtime sessions in deployed container environments.')
 param githubCopilotToken string = ''
 
+@description('Optional M365 client ID written by the postprovision hook for Key Vault seeding.')
+param m365ClientId string = ''
+
+@secure()
+@description('Optional M365 client secret written by the postprovision hook for Key Vault seeding.')
+param m365ClientSecret string = ''
+
+@description('Optional M365 tenant ID written by the postprovision hook for Key Vault seeding.')
+param m365TenantId string = ''
+
 @description('Optional GitHub Copilot model override for runtime reply drafting sessions.')
 param copilotModel string = ''
 
@@ -29,6 +39,7 @@ param messagescreenerApiExists bool
 var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = uniqueString(subscription().id, resourceGroup().id, location)
 var registryName = '${abbrs.containerRegistryRegistries}${resourceToken}'
+var keyVaultName = '${abbrs.keyVaultVaults}${resourceToken}'
 var containerAppsEnvironmentName = '${abbrs.appManagedEnvironments}${resourceToken}'
 var workspaceName = '${abbrs.operationalInsightsWorkspaces}${resourceToken}'
 var botServiceName = 'bot-${environmentName}-${take(resourceToken, 6)}'
@@ -43,6 +54,60 @@ module monitoring 'br/public:avm/ptn/azd/monitoring:0.1.0' = {
     applicationInsightsDashboardName: '${abbrs.portalDashboards}${resourceToken}'
     location: location
     tags: tags
+  }
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
+  name: keyVaultName
+  location: location
+  tags: tags
+  properties: {
+    tenantId: tenant().tenantId
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    enableRbacAuthorization: true
+    enablePurgeProtection: true
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 90
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource m365ClientIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(m365ClientId)) {
+  parent: keyVault
+  name: 'm365-client-id'
+  properties: {
+    value: m365ClientId
+  }
+}
+
+resource m365ClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(m365ClientSecret)) {
+  parent: keyVault
+  name: 'm365-client-secret'
+  properties: {
+    value: m365ClientSecret
+  }
+}
+
+resource m365TenantIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(m365TenantId)) {
+  parent: keyVault
+  name: 'm365-tenant-id'
+  properties: {
+    value: m365TenantId
+  }
+}
+
+var keyVaultSecretsOfficerRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7')
+
+resource keyVaultSecretsOfficerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, messagescreenerApiIdentity.name, keyVaultSecretsOfficerRoleDefinitionId)
+  scope: keyVault
+  properties: {
+    principalId: messagescreenerApiIdentity.outputs.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: keyVaultSecretsOfficerRoleDefinitionId
   }
 }
 // Container registry
@@ -224,6 +289,8 @@ resource botTeamsChannel 'Microsoft.BotService/botServices/channels@2022-09-15' 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = containerAppsEnvironmentName
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = containerRegistry.outputs.loginServer
 output AZURE_CONTAINER_REGISTRY_NAME string = registryName
+output AZURE_KEY_VAULT_ENDPOINT string = keyVault.properties.vaultUri
+output AZURE_KEY_VAULT_NAME string = keyVault.name
 output AZURE_RESOURCE_MESSAGESCREENER_API_ID string = messagescreenerApi.outputs.resourceId
 output SERVICE_API_NAME string = 'messagescreener-api'
 output SERVICE_API_URI string = 'https://${messagescreenerApiResource.properties.configuration.ingress.fqdn}'

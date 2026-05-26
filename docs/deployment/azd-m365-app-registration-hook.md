@@ -45,13 +45,15 @@ hooks:
 
 3. **Manages Credentials**
    - Generates client secret with 1-year expiry
-   - Stores in Key Vault: `m365-client-id`, `m365-client-secret`
+  - Writes M365 values into azd environment for the next `azd deploy`
+  - `azd deploy` seeds Key Vault secrets: `m365-client-id`, `m365-client-secret`, `m365-tenant-id`
    - Can revoke old secrets if re-registering
 
 4. **Updates azd Environment**
    - Sets `MESSAGE_SCREENER_M365_CLIENT_ID`
    - Sets `MESSAGE_SCREENER_M365_CLIENT_SECRET`
    - Sets `MESSAGE_SCREENER_M365_TENANT_ID`
+  - Sets infra params `m365ClientId`, `m365ClientSecret`, `m365TenantId`
 
 ## Usage
 
@@ -155,7 +157,8 @@ The M365 app is registered with minimal-privilege scopes:
 ### First Run
 1. No app exists → creates new app ✓
 2. Generates client secret ✓
-3. Stores in Key Vault ✓
+3. Persists values into azd env ✓
+4. `azd deploy` seeds Key Vault secrets ✓
 
 ### Subsequent Runs (Default)
 1. App exists → **reuses existing app** ✓
@@ -168,7 +171,8 @@ pwsh ./scripts/azd-configure-m365-app.ps1 -Force
 ```
 1. Revokes all old secrets ✓
 2. Creates new secret ✓
-3. Stores new secret in Key Vault ✓
+3. Updates azd env ✓
+4. Next `azd deploy` refreshes Key Vault secrets ✓
 
 ## Troubleshooting
 
@@ -212,19 +216,6 @@ az ad app list --filter "displayName eq 'Message Screener WorkIQ'"
 # Request tenant admin to grant app registration permissions if needed
 ```
 
-### Error: "Failed to store secret in Key Vault"
-
-**Cause:** No permission to write secrets to Key Vault
-
-**Fix:**
-```powershell
-# Request Key Vault Secret Officer role assignment
-# (Have tenant admin assign role or run with sufficient permissions)
-
-# Verify permissions
-az keyvault secret list --vault-name <vault-name>
-```
-
 ## Deployment Flow
 
 ```
@@ -236,15 +227,13 @@ postprovision hook triggered
     ↓
 scripts/azd-configure-m365-app.ps1
     ├─ Determine tenant ID
-    ├─ Locate Key Vault
     ├─ Create/locate M365 app
     ├─ Generate client secret
-    ├─ Store in Key Vault
     └─ Update azd env
     ↓
 azd deploy
     ↓
-[Deploy container with M365Auth config]
+[Seed Key Vault secrets from azd env + deploy container with M365Auth config]
     ↓
 Owner initiates M365 auth:
 POST /api/auth-m365/initiate

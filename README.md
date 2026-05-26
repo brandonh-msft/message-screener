@@ -200,7 +200,7 @@ azd env set MESSAGE_SCREENER_AUDIT_OWNER_READ_API_KEY <key-for-audit-reads>
 The `scripts/azd-configure-m365-app.ps1` script runs automatically after `azd provision` and:
 1. Registers an M365 OAuth2 app in Entra ID (WorkIQ integration)
 2. Generates a client secret with 1-year expiry
-3. Stores credentials securely in Azure Key Vault
+3. Writes M365 values into azd env so the next deploy seeds Azure Key Vault
 4. Updates azd environment: `MESSAGE_SCREENER_M365_CLIENT_ID`, `MESSAGE_SCREENER_M365_CLIENT_SECRET`, `MESSAGE_SCREENER_M365_TENANT_ID`
 
 **Manual re-run or debugging:**
