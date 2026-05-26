@@ -225,7 +225,16 @@ try {
     # Authorization code + PKCE requires an exact callback URI match in app registration.
     $apiBase = $env:MESSAGE_SCREENER_PUBLIC_BASE_URL
     if ([string]::IsNullOrWhiteSpace($apiBase)) {
-        throw "MESSAGE_SCREENER_PUBLIC_BASE_URL is required for app registration redirect URI. Set it with: azd env set MESSAGE_SCREENER_PUBLIC_BASE_URL https://<deployed-api-url>"
+        $apiBase = (& azd env get-value MESSAGE_SCREENER_PUBLIC_BASE_URL 2>$null | Out-String).Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($apiBase)) {
+        $apiBase = (& azd env get-value SERVICE_API_URI 2>$null | Out-String).Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($apiBase)) {
+        $apiBase = (& azd env get-value MESSAGE_SCREENER_API_ENDPOINT 2>$null | Out-String).Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($apiBase)) {
+        throw "Unable to resolve API base URL for redirect URI. Set one of: MESSAGE_SCREENER_PUBLIC_BASE_URL, SERVICE_API_URI, or MESSAGE_SCREENER_API_ENDPOINT."
     }
     $replyUrl = "$apiBase/api/authm365/callback"
     Write-Status "Reply URL: $replyUrl"
