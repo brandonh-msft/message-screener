@@ -17,16 +17,6 @@ param personalReviewConversationId string = ''
 @description('Optional GitHub token used by GitHub Copilot SDK runtime sessions in deployed container environments.')
 param githubCopilotToken string = ''
 
-@description('Optional M365 client ID written by the preprovision hook for Key Vault seeding and runtime config.')
-param m365ClientId string = ''
-
-@secure()
-@description('Optional M365 client secret written by the preprovision hook for Key Vault seeding and runtime config.')
-param m365ClientSecret string = ''
-
-@description('Optional M365 tenant ID written by the preprovision hook for Key Vault seeding and runtime config.')
-param m365TenantId string = ''
-
 @description('Optional GitHub Copilot model override for runtime reply drafting sessions.')
 param copilotModel string = ''
 
@@ -72,30 +62,6 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 90
     publicNetworkAccess: 'Enabled'
-  }
-}
-
-resource m365ClientIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(m365ClientId)) {
-  parent: keyVault
-  name: 'm365-client-id'
-  properties: {
-    value: m365ClientId
-  }
-}
-
-resource m365ClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(m365ClientSecret)) {
-  parent: keyVault
-  name: 'm365-client-secret'
-  properties: {
-    value: m365ClientSecret
-  }
-}
-
-resource m365TenantIdSecret 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(m365TenantId)) {
-  parent: keyVault
-  name: 'm365-tenant-id'
-  properties: {
-    value: m365TenantId
   }
 }
 
@@ -189,30 +155,6 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
           {
             name: 'MessageScreener__Teams__PersonalReviewConversationId'
             value: personalReviewConversationId
-          }
-          {
-            name: 'MessageScreener__M365Auth__Enabled'
-            value: (!empty(m365ClientId) && !empty(m365ClientSecret) && !empty(m365TenantId)) ? 'true' : 'false'
-          }
-          {
-            name: 'MessageScreener__M365Auth__ClientId'
-            value: m365ClientId
-          }
-          {
-            name: 'MessageScreener__M365Auth__ClientSecret'
-            value: m365ClientSecret
-          }
-          {
-            name: 'MessageScreener__M365Auth__TenantId'
-            value: m365TenantId
-          }
-          {
-            name: 'MessageScreener__M365Auth__PublicBaseUrl'
-            value: 'https://${messagescreenerApiResource.properties.configuration.ingress.fqdn}'
-          }
-          {
-            name: 'MessageScreener__M365Auth__KeyVaultUrl'
-            value: 'https://${keyVault.name}.${environment().suffixes.keyvaultDns}/'
           }
           {
             name: 'MessageScreener__Copilot__GitHubToken'
