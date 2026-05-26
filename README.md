@@ -195,53 +195,14 @@ azd env set MESSAGE_SCREENER_AUDIT_OWNER_READ_API_KEY <key-for-audit-reads>
 
 ### M365 Authentication for WorkIQ
 
-**Automated Setup (preprovision hook):**
+This service no longer performs backend-managed M365 OAuth app registration or token storage.
+To avoid tenant admin-consent blockers, WorkIQ access is expected to run in the user's approved
+Copilot/Teams context.
 
-The `scripts/azd-configure-m365-app.ps1` script runs automatically before `azd provision` and:
-1. Registers an M365 OAuth2 app in Entra ID (WorkIQ integration)
-2. Generates a client secret and automatically retries with shorter expiries if tenant policy enforces stricter maximum lifetime
-3. Writes M365 values into azd env so the same provision/deploy cycle seeds runtime config and Key Vault
-4. Updates azd environment: `MESSAGE_SCREENER_M365_CLIENT_ID`, `MESSAGE_SCREENER_M365_CLIENT_SECRET`, `MESSAGE_SCREENER_M365_TENANT_ID`
-
-**Manual re-run or debugging:**
+You can run this helper to confirm the mode:
 
 ```powershell
-# Re-run M365 app registration with same app (reuses if exists)
-pwsh ./scripts/azd-configure-m365-app.ps1
-
-# Force re-registration (creates new secret)
-pwsh ./scripts/azd-configure-m365-app.ps1 -Force
-
-# Manual verification in Entra ID
-https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade
-```
-
-**Owner Authentication Workflow (scripted):**
-
-Use the auth bootstrap script instead of calling endpoints manually:
-
-```powershell
-# Uses MESSAGE_SCREENER_PUBLIC_BASE_URL from azd env when available
 pwsh ./scripts/auth-workiq.ps1
-
-# Optional: specify API URL explicitly and open browser automatically
-pwsh ./scripts/auth-workiq.ps1 -ApiBaseUrl https://<api-url> -OpenBrowser
-```
-
-The script:
-1. Checks `/api/authm365/status`
-2. Calls `/api/authm365/start` and opens browser-based sign-in
-3. Polls `/api/authm365/status` until callback/token exchange completes
-4. Exits when refresh token is stored and WorkIQ auth is ready
-
-**Status & Management:**
-
-```powershell
-# Check M365 auth readiness
-curl https://<api-url>/api/authm365/status
-
-# Revoke M365 auth (removes Key Vault token)
-curl -X POST https://<api-url>/api/authm365/revoke
 ```
 
 `MESSAGE_SCREENER_TEAMS_APP_ID` is optional. If omitted, infra generates a deterministic Teams app ID for the manifest package.

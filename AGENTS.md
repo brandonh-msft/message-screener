@@ -99,7 +99,6 @@ azd env set MESSAGE_SCREENER_PUBLIC_BASE_URL https://<deployed-api-url>
 azd up
 ```
 
-Post-provision hook runs `scripts/azd-configure-m365-app.ps1`.
 Post-deploy hook runs `scripts/azd-generate-teams-manifest.ps1`.
 
 ## Security and operations guardrails
@@ -123,4 +122,3 @@ Recommended commit format:
 
 <optional detail>
 ```
-
