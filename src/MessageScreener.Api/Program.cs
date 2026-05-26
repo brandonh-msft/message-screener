@@ -646,12 +646,31 @@ static ForwardedMessageIntakeRequest? TryParseForwardedMessageFromInvoke(JsonEle
 
 static object CreateComposeExtensionStatus(string text)
 {
+    object cardContent = new
+    {
+        title = "Message Screener",
+        text,
+    };
+
     return new
     {
         composeExtension = new
         {
-            type = "message",
-            text,
+            type = "result",
+            attachmentLayout = "list",
+            attachments = new[]
+            {
+                new
+                {
+                    contentType = "application/vnd.microsoft.card.hero",
+                    content = cardContent,
+                    preview = new
+                    {
+                        contentType = "application/vnd.microsoft.card.hero",
+                        content = cardContent,
+                    },
+                },
+            },
         }
     };
 }
