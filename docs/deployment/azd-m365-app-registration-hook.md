@@ -236,7 +236,7 @@ azd deploy
 [Seed Key Vault secrets from azd env + deploy container with M365Auth config]
     ↓
 Owner initiates M365 auth:
-POST /api/auth-m365/initiate
+POST /api/authm365/initiate
     → Device code exchange
     → Refresh token stored in KV
     → WorkIQ can query M365
@@ -273,13 +273,13 @@ After the hook completes, `.NET appsettings` are configured via `azd deploy`:
    ```
 
 3. **Owner Authenticates**
-   - Visit: `POST https://<api-url>/api/auth-m365/initiate`
+   - Visit: `POST https://<api-url>/api/authm365/initiate`
    - Follow device code flow
    - Refresh token stored securely
 
 4. **Verify Readiness**
    ```powershell
-   curl https://<api-url>/api/auth-m365/status
+   curl https://<api-url>/api/authm365/status
    ```
 
 ## References
@@ -288,3 +288,4 @@ After the hook completes, `.NET appsettings` are configured via `azd deploy`:
 - [azd Hooks](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/azd-reference#hooks)
 - [Azure CLI App Registration](https://learn.microsoft.com/en-us/cli/azure/ad/app?view=azure-cli-latest)
 - [OAuth 2.0 Device Flow](https://datatracker.ietf.org/doc/html/rfc8628)
+

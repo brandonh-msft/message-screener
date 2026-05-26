@@ -71,22 +71,22 @@ McpCredentialContext
 
 **Endpoints:**
 
-1. **POST `/api/auth-m365/initiate`**
+1. **POST `/api/authm365/initiate`**
    - Initiates Device Flow
    - Returns device code + user code
    - Owner visits verification URI to authenticate
 
-2. **POST `/api/auth-m365/poll`**
+2. **POST `/api/authm365/poll`**
    - Polls for auth completion (call repeatedly until authorized)
    - Returns status: `pending`, `authorized`, or error
    - On success, refresh token is stored securely
 
-3. **POST `/api/auth-m365/revoke`**
+3. **POST `/api/authm365/revoke`**
    - Revokes M365 authentication
    - Deletes refresh token from Key Vault
    - Clears cached access token
 
-4. **GET `/api/auth-m365/status`**
+4. **GET `/api/authm365/status`**
    - Checks if M365 auth is configured
    - Returns current readiness state
 
@@ -162,16 +162,16 @@ finally
 
 - [ ] Register M365 app in Entra ID (tenant admin task)
 - [ ] Set configuration via `azd env set` or appsettings
-- [ ] Test `POST /api/auth-m365/initiate` → receive device code
+- [ ] Test `POST /api/authm365/initiate` → receive device code
 - [ ] Owner authenticates via verification URI
-- [ ] Test `POST /api/auth-m365/poll` → returns authorized status
+- [ ] Test `POST /api/authm365/poll` → returns authorized status
 - [ ] Verify refresh token stored in Key Vault
-- [ ] Test `GET /api/auth-m365/status` → returns `IsConfigured: true`
+- [ ] Test `GET /api/authm365/status` → returns `IsConfigured: true`
 - [ ] Test `IM365TokenProvider.GetM365AccessTokenAsync()` → returns valid token
 - [ ] Test `IMcpCredentialBridge.PrepareCredentialContextAsync()` → creates credential file + env vars
 - [ ] Verify temp file has restricted permissions (Unix)
 - [ ] Test `IMcpCredentialBridge.CleanupCredentialContextAsync()` → deletes temp files securely
-- [ ] Test `POST /api/auth-m365/revoke` → removes auth + clears cache
+- [ ] Test `POST /api/authm365/revoke` → removes auth + clears cache
 
 ## Key Design Decisions
 
@@ -266,3 +266,4 @@ finally
 - [Azure Key Vault SDK](https://learn.microsoft.com/en-us/azure/key-vault/general/overview)
 - [Microsoft SFI Defaults](https://microsoft.github.io/security-framework-implementation/)
 - [Source-Generated Logging](https://learn.microsoft.com/en-us/dotnet/core/extensions/logger-message-generator)
+

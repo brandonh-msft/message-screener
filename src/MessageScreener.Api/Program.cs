@@ -23,6 +23,7 @@ const string ForwardMessageActionCommandId = "forwardToMessageScreener";
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddControllers();
 builder.Services
     .AddOptions<MessageScreenerAgentOptions>()
     .BindConfiguration(MessageScreenerAgentOptions.SectionName);

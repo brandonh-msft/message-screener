@@ -111,27 +111,43 @@ function New-ClientSecret {
     )
     
     Write-Status "Creating client secret for app: $AppId"
-    
-    $secretPassword = & az ad app credential reset `
-        --id $AppId `
-        --credential-description "Message Screener WorkIQ Auth" `
-        --years 1 `
-        --query password `
-        --output tsv `
-        --only-show-errors 2>&1
 
-    if ($LASTEXITCODE -ne 0) {
-        $errorText = ($secretPassword | Out-String).Trim()
-        throw "Failed to create client secret. Azure CLI returned: $errorText"
+    $fallbackDays = @(180, 90, 30)
+    $expiryAttempts = @($ExpiryDays) + $fallbackDays | Where-Object { $_ -gt 0 } | Select-Object -Unique
+    $lastErrorText = $null
+
+    foreach ($attemptDays in $expiryAttempts) {
+        $endDate = (Get-Date).ToUniversalTime().AddDays($attemptDays).ToString("yyyy-MM-ddTHH:mm:ssZ")
+        Write-Status "Trying client secret expiry of $attemptDays day(s) (end date: $endDate)"
+
+        $secretPassword = & az ad app credential reset `
+            --id $AppId `
+            --display-name "Message Screener WorkIQ Auth" `
+            --end-date $endDate `
+            --query password `
+            --output tsv `
+            --only-show-errors 2>&1
+
+        if ($LASTEXITCODE -eq 0) {
+            $secretPasswordText = ($secretPassword | Out-String).Trim()
+            if ([string]::IsNullOrWhiteSpace($secretPasswordText)) {
+                throw "Failed to create client secret. Azure CLI returned an empty password."
+            }
+
+            Write-Status "Client secret created with $attemptDays day(s) expiry." -Level "Success"
+            return [pscustomobject]@{ password = $secretPasswordText }
+        }
+
+        $lastErrorText = ($secretPassword | Out-String).Trim()
+        if ($lastErrorText -match "Credential lifetime exceeds the max value allowed as per assigned policy") {
+            Write-Status "Tenant policy rejected $attemptDays day(s) expiry. Retrying with a shorter lifetime." -Level "Warn"
+            continue
+        }
+
+        throw "Failed to create client secret. Azure CLI returned: $lastErrorText"
     }
 
-    $secretPasswordText = ($secretPassword | Out-String).Trim()
-    if ([string]::IsNullOrWhiteSpace($secretPasswordText)) {
-        throw "Failed to create client secret. Azure CLI returned an empty password."
-    }
-
-    Write-Status "Client secret created." -Level "Success"
-    return [pscustomobject]@{ password = $secretPasswordText }
+    throw "Failed to create client secret. Tried expiry values ($($expiryAttempts -join ', ') days), but tenant policy rejected all attempts. Last Azure CLI error: $lastErrorText"
 }
 
 function Update-AzdEnvironment {

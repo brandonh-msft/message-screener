@@ -237,12 +237,12 @@ public sealed class AuthM365Controller(
             IsConfigured: hasAuth,
             Message: hasAuth
                 ? "M365 authentication is configured. WorkIQ can access your data."
-                : "M365 authentication is not configured. Please authenticate via POST /api/auth-m365/initiate."));
+                : "M365 authentication is not configured. Please authenticate via POST /api/authm365/initiate."));
     }
 }
 
 /// <summary>
-/// Response from POST /api/auth-m365/initiate
+/// Response from POST /api/authm365/initiate
 /// </summary>
 public sealed record M365AuthInitiateResponse(
     string DeviceCode,
@@ -252,14 +252,14 @@ public sealed record M365AuthInitiateResponse(
     int Interval);
 
 /// <summary>
-/// Request to POST /api/auth-m365/poll
+/// Request to POST /api/authm365/poll
 /// </summary>
 public sealed record M365AuthPollRequest(
     [property: JsonPropertyName("device_code")]
     string DeviceCode);
 
 /// <summary>
-/// Response from POST /api/auth-m365/poll
+/// Response from POST /api/authm365/poll
 /// </summary>
 public sealed record M365AuthPollResponse(
     string Status,
@@ -268,7 +268,7 @@ public sealed record M365AuthPollResponse(
     string? AccessToken = null);
 
 /// <summary>
-/// Response from GET /api/auth-m365/status
+/// Response from GET /api/authm365/status
 /// </summary>
 public sealed record M365AuthStatusResponse(
     bool IsConfigured,

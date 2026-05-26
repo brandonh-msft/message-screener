@@ -191,6 +191,26 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
             value: personalReviewConversationId
           }
           {
+            name: 'MessageScreener__M365Auth__Enabled'
+            value: (!empty(m365ClientId) && !empty(m365ClientSecret) && !empty(m365TenantId)) ? 'true' : 'false'
+          }
+          {
+            name: 'MessageScreener__M365Auth__ClientId'
+            value: m365ClientId
+          }
+          {
+            name: 'MessageScreener__M365Auth__ClientSecret'
+            value: m365ClientSecret
+          }
+          {
+            name: 'MessageScreener__M365Auth__TenantId'
+            value: m365TenantId
+          }
+          {
+            name: 'MessageScreener__M365Auth__KeyVaultUrl'
+            value: 'https://${keyVault.name}.${environment().suffixes.keyvaultDns}/'
+          }
+          {
             name: 'MessageScreener__Copilot__GitHubToken'
             value: githubCopilotToken
           }
