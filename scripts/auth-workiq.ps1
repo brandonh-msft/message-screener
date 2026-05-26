@@ -49,8 +49,18 @@ function Resolve-ApiBaseUrl {
 function Read-ProblemDetail {
     param([System.Management.Automation.ErrorRecord]$ErrorRecord)
 
-    if (-not [string]::IsNullOrWhiteSpace($ErrorRecord.ErrorDetails.Message)) {
-        $errorDetailsText = $ErrorRecord.ErrorDetails.Message.Trim()
+    $errorDetailsText = $null
+    if ($null -ne $ErrorRecord.ErrorDetails) {
+        if ($ErrorRecord.ErrorDetails -is [System.Management.Automation.ErrorDetails]) {
+            $errorDetailsText = $ErrorRecord.ErrorDetails.Message
+        }
+        else {
+            $errorDetailsText = ($ErrorRecord.ErrorDetails | Out-String)
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($errorDetailsText)) {
+        $errorDetailsText = $errorDetailsText.Trim()
         try {
             $errorDetailsJson = $errorDetailsText | ConvertFrom-Json -ErrorAction Stop
             if ($errorDetailsJson.detail) {

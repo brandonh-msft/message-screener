@@ -41,7 +41,7 @@ hooks:
 2. **Creates/Updates M365 App**
    - Registers app named "Message Screener WorkIQ" in Entra ID
    - Sets reply URL to `https://<api-url>/api/authm365/callback`
-   - Requests Microsoft Graph scopes: `Mail.Read`, `Chat.Read`, `TeamsActivity.Read`
+   - Requests Microsoft Graph delegated scope: `Mail.Read` (no-admin profile)
 
 3. **Manages Credentials**
    - Generates client secret with 1-year expiry
@@ -122,12 +122,10 @@ az keyvault secret list --vault-name <vault-name> --query "[?starts_with(name, '
 The M365 app is registered with minimal-privilege scopes:
 
 - `Mail.Read` - Read user's emails (for context analysis)
-- `Chat.Read` - Read Teams messages (for context analysis)
-- `TeamsActivity.Read` - Read Teams activity (for context analysis)
 
 **Why These?**
 - Minimal permissions (read-only, no write/delete)
-- Sufficient for WorkIQ to analyze communication patterns
+- Sufficient for email-based WorkIQ context retrieval without tenant admin consent
 - User must still grant consent individually via browser auth flow
 
 ## Security & Compliance
@@ -138,8 +136,8 @@ The M365 app is registered with minimal-privilege scopes:
 - 1-year expiry (auto-renew in next deployment)
 
 ✅ **App Permissions**
-- No admin consent required (user-delegated scopes)
-- Least-privilege (read-only Graph scopes)
+- No admin consent required (Mail.Read delegated profile, subject to tenant user-consent policy)
+- Least-privilege (read-only Graph scope)
 - Reply URL hardcoded to prevent open redirect
 
 ✅ **Audit Trail**

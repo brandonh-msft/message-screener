@@ -25,7 +25,7 @@ public sealed class AuthM365Controller(
 {
     private const string AuthorizeEndpoint = "https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/authorize";
     private const string TokenEndpoint = "https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token";
-    private const string M365Scope = "offline_access Mail.Read Chat.Read TeamsActivity.Read";
+    private const string M365Scope = "offline_access Mail.Read";
     private const string PkceStateCachePrefix = "m365-auth-state:";
     private const int PkceStateTtlSeconds = 900;
 

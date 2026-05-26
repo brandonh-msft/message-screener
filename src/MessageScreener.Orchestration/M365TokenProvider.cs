@@ -81,7 +81,7 @@ public sealed class M365TokenProvider(
     ILogger<M365TokenProvider> logger) : IM365TokenProvider
 {
     private const string TokenEndpoint = "https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token";
-    private const string M365Scope = "https://graph.microsoft.com/.default";
+    private const string M365Scope = "Mail.Read";
 
     private string? _cachedAccessToken;
     private DateTimeOffset _cachedTokenExpiry = DateTimeOffset.MinValue;
@@ -107,7 +107,7 @@ public sealed class M365TokenProvider(
         {
             M365TokenProviderLog.NoRefreshToken(logger);
             throw new InvalidOperationException(
-                "No M365 refresh token found. Owner must authenticate via /auth/m365/initiate first.");
+                "No M365 refresh token found. Owner must authenticate via /api/authm365/start first.");
         }
 
         M365TokenProviderLog.RefreshingToken(logger);

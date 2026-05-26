@@ -35,9 +35,7 @@ $ErrorActionPreference = "Stop"
 # Configuration
 $appDisplayName = "Message Screener WorkIQ"
 $requiredScopes = @(
-    "https://graph.microsoft.com/Mail.Read",
-    "https://graph.microsoft.com/Chat.Read",
-    "https://graph.microsoft.com/TeamsActivity.Read"
+    "https://graph.microsoft.com/Mail.Read"
 )
 
 function Write-Status {
@@ -81,14 +79,6 @@ function New-M365App {
     "resourceAccess": [
       {
         "id": "810c84f8-796c-4033-b4c3-c6f6f52c0fda",
-        "type": "Scope"
-      },
-      {
-        "id": "9241abd9-d0e6-425a-bd4f-3c5feeb3d2d9",
-        "type": "Scope"
-      },
-      {
-        "id": "28282671-d4c6-4170-ae45-6f67dc8bb556",
         "type": "Scope"
       }
     ]
