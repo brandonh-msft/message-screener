@@ -94,6 +94,38 @@ function New-M365App {
     return $app
 }
 
+function Update-M365AppConfig {
+    param(
+        [string]$AppId,
+        [string]$ReplyUrl
+    )
+
+    Write-Status "Updating app redirect URI and delegated scopes (Mail.Read no-admin profile)."
+
+    $updateResult = & az ad app update `
+        --id $AppId `
+        --web-redirect-uris $ReplyUrl `
+        --required-resource-accesses @"
+[
+  {
+    "resourceAppId": "00000003-0000-0000-c000-000000000000",
+    "resourceAccess": [
+      {
+        "id": "810c84f8-796c-4033-b4c3-c6f6f52c0fda",
+        "type": "Scope"
+      }
+    ]
+  }
+]
+"@ `
+        --only-show-errors 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        $errorText = ($updateResult | Out-String).Trim()
+        throw "Failed to update app registration. Azure CLI returned: $errorText"
+    }
+}
+
 function New-ClientSecret {
     param(
         [string]$AppId,
@@ -220,6 +252,9 @@ try {
     else {
         $app = New-M365App -ReplyUrl $replyUrl
     }
+
+    # Always enforce latest redirect URI and delegated scope set, even for existing apps.
+    Update-M365AppConfig -AppId $app.appId -ReplyUrl $replyUrl
     
     # Create/update client secret
     $secret = New-ClientSecret -AppId $app.appId
@@ -232,7 +267,7 @@ try {
     Write-Host "Next steps:"
     Write-Host "1. Verify app in Entra ID: https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
     Write-Host "2. Set M365Auth.Enabled=true in appsettings (or via configuration)"
-    Write-Host "3. Owner can authenticate at: $apiBase/auth/m365/initiate"
+    Write-Host "3. Owner can authenticate at: $apiBase/api/authm365/start"
     Write-Host ""
 }
 catch {
