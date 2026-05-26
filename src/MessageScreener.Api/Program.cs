@@ -24,7 +24,6 @@ WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
-builder.Services.AddMemoryCache();
 builder.Services
     .AddOptions<MessageScreenerAgentOptions>()
     .BindConfiguration(MessageScreenerAgentOptions.SectionName);
@@ -37,9 +36,6 @@ builder.Services
 builder.Services
     .AddOptions<MessageScreenerAuditOptions>()
     .BindConfiguration(MessageScreenerAuditOptions.SectionName);
-builder.Services
-    .AddOptions<M365TokenProviderOptions>()
-    .BindConfiguration(M365TokenProviderOptions.SectionName);
 builder.Services.AddSingleton<IInboundEventStore, InMemoryInboundEventStore>();
 builder.Services.AddSingleton<IForwardAuditStore, InMemoryForwardAuditStore>();
 builder.Services.AddSingleton<ITriggerPolicy, TeamsTriggerPolicy>();
@@ -49,8 +45,6 @@ builder.Services.AddSingleton<ICopilotReplyDraftingService, CopilotReplyDrafting
 builder.Services.AddSingleton<ICopilotReadinessService, CopilotReadinessService>();
 builder.Services.AddSingleton<ICallerAutoResponseComposer, CallerAutoResponseComposer>();
 builder.Services.AddSingleton<IGhcpAgentHarness, GhcpAgentHarness>();
-builder.Services.AddSingleton<IM365TokenProvider, M365TokenProvider>();
-builder.Services.AddSingleton<IMcpCredentialBridge, McpCredentialBridge>();
 builder.Services.AddSingleton<IPersonalReviewConversationRegistry, InMemoryPersonalReviewConversationRegistry>();
 builder.Services.AddScoped<ITeamsMessageClient, BotConnectorMessageClient>();
 builder.Services.AddScoped<IReviewDeliveryService, ReviewDeliveryService>();
