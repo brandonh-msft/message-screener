@@ -11,6 +11,7 @@ namespace MessageScreener.ReviewDelivery
     {
         ValueTask<PersonalReviewConversationContext> CreatePersonalConversationAsync(
             string serviceUrl,
+            string tenantId,
             string botId,
             string userId,
             string userDisplayName,
@@ -29,6 +30,7 @@ namespace MessageScreener.ReviewDelivery
     {
         public async ValueTask<PersonalReviewConversationContext> CreatePersonalConversationAsync(
             string serviceUrl,
+            string tenantId,
             string botId,
             string userId,
             string userDisplayName,
@@ -44,6 +46,13 @@ namespace MessageScreener.ReviewDelivery
                 bot = new { id = botId },
                 isGroup = false,
                 serviceUrl,
+                channelData = new
+                {
+                    tenant = new
+                    {
+                        id = tenantId,
+                    },
+                },
                 members = new[]
                 {
                     new
@@ -65,7 +74,11 @@ namespace MessageScreener.ReviewDelivery
             using HttpClient httpClient = httpClientFactory.CreateClient();
             using HttpResponseMessage response = await httpClient.SendAsync(requestMessage, cancellationToken);
             string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            response.EnsureSuccessStatusCode();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException(
+                    $"Bot connector create conversation failed: {(int)response.StatusCode} {response.ReasonPhrase}; body={responseBody}");
+            }
 
             using JsonDocument document = JsonDocument.Parse(responseBody);
             string? conversationId = document.RootElement.TryGetProperty("id", out JsonElement idElement)

@@ -6,6 +6,7 @@ public interface IPersonalReviewConversationBootstrapper
 {
     ValueTask<PersonalReviewConversationContext> EnsureConversationAsync(
         string serviceUrl,
+        string tenantId,
         string invokingUserId,
         string invokingUserDisplayName,
         string botId,
@@ -21,6 +22,7 @@ public sealed class PersonalReviewConversationBootstrapper(
 
     public async ValueTask<PersonalReviewConversationContext> EnsureConversationAsync(
         string serviceUrl,
+        string tenantId,
         string invokingUserId,
         string invokingUserDisplayName,
         string botId,
@@ -33,6 +35,7 @@ public sealed class PersonalReviewConversationBootstrapper(
         }
 
         if (string.IsNullOrWhiteSpace(serviceUrl) ||
+            string.IsNullOrWhiteSpace(tenantId) ||
             string.IsNullOrWhiteSpace(invokingUserId) ||
             string.IsNullOrWhiteSpace(botId))
         {
@@ -55,6 +58,7 @@ public sealed class PersonalReviewConversationBootstrapper(
 
             PersonalReviewConversationContext created = await teamsMessageClient.CreatePersonalConversationAsync(
                 serviceUrl,
+                tenantId,
                 botId,
                 invokingUserId,
                 invokingUserDisplayName,

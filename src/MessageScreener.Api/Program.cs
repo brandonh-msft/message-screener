@@ -247,11 +247,13 @@ app.MapPost("/api/messages", async (
         try
         {
             if (!string.IsNullOrWhiteSpace(serviceUrl) &&
+                !string.IsNullOrWhiteSpace(forwardedRequest.TenantId) &&
                 !string.IsNullOrWhiteSpace(fromId) &&
                 !string.IsNullOrWhiteSpace(botId))
             {
                 await personalReviewConversationBootstrapper.EnsureConversationAsync(
                     serviceUrl,
+                    forwardedRequest.TenantId,
                     fromId,
                     fromDisplayName ?? "Message Screener user",
                     botId,
