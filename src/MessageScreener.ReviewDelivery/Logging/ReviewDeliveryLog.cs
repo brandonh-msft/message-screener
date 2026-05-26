@@ -31,5 +31,56 @@ namespace MessageScreener.ReviewDelivery
             ILogger logger,
             string conversationId,
             string reason);
+
+        [LoggerMessage(
+            EventId = 2004,
+            Level = LogLevel.Information,
+            Message = "Bootstrapping personal review conversation for user {UserId}. ServiceUrlPresent={HasServiceUrl}")]
+        public static partial void PersonalReviewConversationBootstrapStarting(
+            ILogger logger,
+            string userId,
+            bool hasServiceUrl);
+
+        [LoggerMessage(
+            EventId = 2005,
+            Level = LogLevel.Information,
+            Message = "Bootstrapped personal review conversation {ConversationId} for user {UserId}.")]
+        public static partial void PersonalReviewConversationBootstrapCompleted(
+            ILogger logger,
+            string conversationId,
+            string userId);
+
+        [LoggerMessage(
+            EventId = 2006,
+            Level = LogLevel.Information,
+            Message = "Loaded personal review conversation {ConversationId} from durable store.")]
+        public static partial void PersonalReviewConversationLoaded(
+            ILogger logger,
+            string conversationId);
+
+        [LoggerMessage(
+            EventId = 2007,
+            Level = LogLevel.Information,
+            Message = "Persisted personal review conversation {ConversationId} to durable store.")]
+        public static partial void PersonalReviewConversationPersisted(
+            ILogger logger,
+            string conversationId);
+
+        [LoggerMessage(
+            EventId = 2008,
+            Level = LogLevel.Warning,
+            Message = "Failed to load personal review conversation from durable store. Error={Error}")]
+        public static partial void PersonalReviewConversationLoadFailed(
+            ILogger logger,
+            string error);
+
+        [LoggerMessage(
+            EventId = 2009,
+            Level = LogLevel.Warning,
+            Message = "Failed to persist personal review conversation {ConversationId}. Error={Error}")]
+        public static partial void PersonalReviewConversationPersistFailed(
+            ILogger logger,
+            string conversationId,
+            string error);
     }
 }

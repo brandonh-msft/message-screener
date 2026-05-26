@@ -9,6 +9,13 @@ namespace MessageScreener.ReviewDelivery
 {
     public interface ITeamsMessageClient
     {
+        ValueTask<PersonalReviewConversationContext> CreatePersonalConversationAsync(
+            string serviceUrl,
+            string botId,
+            string userId,
+            string userDisplayName,
+            CancellationToken cancellationToken);
+
         ValueTask SendMessageAsync(
             string serviceUrl,
             string conversationId,
@@ -20,19 +27,66 @@ namespace MessageScreener.ReviewDelivery
         IHttpClientFactory httpClientFactory,
         IOptions<MessageScreenerTeamsOptions> options) : ITeamsMessageClient
     {
+        public async ValueTask<PersonalReviewConversationContext> CreatePersonalConversationAsync(
+            string serviceUrl,
+            string botId,
+            string userId,
+            string userDisplayName,
+            CancellationToken cancellationToken)
+        {
+            var credential = CreateCredential();
+            AccessToken token = await credential.GetTokenAsync(
+                new TokenRequestContext(["https://api.botframework.com/.default"]),
+                cancellationToken);
+
+            var conversationRequest = new
+            {
+                bot = new { id = botId },
+                isGroup = false,
+                serviceUrl,
+                members = new[]
+                {
+                    new
+                    {
+                        id = userId,
+                        name = userDisplayName,
+                    },
+                },
+            };
+
+            string connectorUrl = $"{serviceUrl.TrimEnd('/')}/v3/conversations";
+            string jsonPayload = JsonSerializer.Serialize(conversationRequest);
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, connectorUrl)
+            {
+                Content = new StringContent(jsonPayload, Encoding.UTF8, "application/json")
+            };
+            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.Token);
+
+            using HttpClient httpClient = httpClientFactory.CreateClient();
+            using HttpResponseMessage response = await httpClient.SendAsync(requestMessage, cancellationToken);
+            string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            using JsonDocument document = JsonDocument.Parse(responseBody);
+            string? conversationId = document.RootElement.TryGetProperty("id", out JsonElement idElement)
+                ? idElement.GetString()
+                : null;
+
+            if (string.IsNullOrWhiteSpace(conversationId))
+            {
+                throw new InvalidOperationException("Bot connector did not return a conversation id for the personal review chat.");
+            }
+
+            return new PersonalReviewConversationContext(conversationId, serviceUrl);
+        }
+
         public async ValueTask SendMessageAsync(
             string serviceUrl,
             string conversationId,
             string messageText,
             CancellationToken cancellationToken)
         {
-            var credentialOptions = new DefaultAzureCredentialOptions();
-            if (!string.IsNullOrWhiteSpace(options.Value.ManagedIdentityClientId))
-            {
-                credentialOptions.ManagedIdentityClientId = options.Value.ManagedIdentityClientId;
-            }
-
-            var credential = new DefaultAzureCredential(credentialOptions);
+            var credential = CreateCredential();
             AccessToken token = await credential.GetTokenAsync(
                 new TokenRequestContext(["https://api.botframework.com/.default"]),
                 cancellationToken);
@@ -56,6 +110,17 @@ namespace MessageScreener.ReviewDelivery
             using HttpClient httpClient = httpClientFactory.CreateClient();
             using HttpResponseMessage response = await httpClient.SendAsync(requestMessage, cancellationToken);
             response.EnsureSuccessStatusCode();
+        }
+
+        private DefaultAzureCredential CreateCredential()
+        {
+            var credentialOptions = new DefaultAzureCredentialOptions();
+            if (!string.IsNullOrWhiteSpace(options.Value.ManagedIdentityClientId))
+            {
+                credentialOptions.ManagedIdentityClientId = options.Value.ManagedIdentityClientId;
+            }
+
+            return new DefaultAzureCredential(credentialOptions);
         }
     }
 }

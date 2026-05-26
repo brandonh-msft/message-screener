@@ -48,7 +48,7 @@ namespace MessageScreener.ReviewDelivery
             string? targetConversationId = _options.PersonalReviewConversationId;
             string? targetServiceUrl = _options.BotServiceUrl;
 
-            PersonalReviewConversationContext? remembered = conversationRegistry.GetCurrent();
+            PersonalReviewConversationContext? remembered = await conversationRegistry.GetCurrentAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(targetConversationId))
             {
                 targetConversationId = remembered?.ConversationId;

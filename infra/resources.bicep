@@ -153,6 +153,10 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
             value: messagescreenerApiIdentity.outputs.clientId
           }
           {
+            name: 'MessageScreener__Teams__KeyVaultUri'
+            value: keyVault.properties.vaultUri
+          }
+          {
             name: 'MessageScreener__Teams__PersonalReviewConversationId'
             value: personalReviewConversationId
           }

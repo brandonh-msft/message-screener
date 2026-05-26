@@ -45,7 +45,8 @@ builder.Services.AddSingleton<ICopilotReplyDraftingService, CopilotReplyDrafting
 builder.Services.AddSingleton<ICopilotReadinessService, CopilotReadinessService>();
 builder.Services.AddSingleton<ICallerAutoResponseComposer, CallerAutoResponseComposer>();
 builder.Services.AddSingleton<IGhcpAgentHarness, GhcpAgentHarness>();
-builder.Services.AddSingleton<IPersonalReviewConversationRegistry, InMemoryPersonalReviewConversationRegistry>();
+builder.Services.AddSingleton<IPersonalReviewConversationRegistry, KeyVaultPersonalReviewConversationRegistry>();
+builder.Services.AddSingleton<IPersonalReviewConversationBootstrapper, PersonalReviewConversationBootstrapper>();
 builder.Services.AddScoped<ITeamsMessageClient, BotConnectorMessageClient>();
 builder.Services.AddScoped<IReviewDeliveryService, ReviewDeliveryService>();
 builder.Services.AddHttpClient();
@@ -191,6 +192,7 @@ app.MapPost("/api/messages", async (
     IMessageIntakeService intakeService,
     IForwardAuditStore forwardAuditStore,
     IPersonalReviewConversationRegistry personalReviewConversationRegistry,
+    IPersonalReviewConversationBootstrapper personalReviewConversationBootstrapper,
     ICommunicationTwinService communicationTwinService,
     ICallerAutoResponseComposer callerAutoResponseComposer,
     IReviewDeliveryService reviewDeliveryService,
@@ -211,7 +213,12 @@ app.MapPost("/api/messages", async (
     string? conversationId = GetNestedJsonString(root, "conversation", "id");
     string? conversationType = GetNestedJsonString(root, "conversation", "conversationType");
     string? fromId = GetNestedJsonString(root, "from", "id");
+    string? fromDisplayName = FirstNonEmpty(
+        GetNestedJsonString(root, "from", "name"),
+        GetJsonPathString(root, "from", "user", "displayName"),
+        "Message Screener user");
     string? recipientId = GetNestedJsonString(root, "recipient", "id");
+    string? botId = FirstNonEmpty(recipientId, teamsOptions.Value.ManagedIdentityClientId);
 
     AppLog.BotWebhookProcessed(
         logger,
@@ -232,13 +239,25 @@ app.MapPost("/api/messages", async (
         if (forwardedRequest is null)
         {
             return Results.Ok(CreateComposeExtensionStatus(
-                "Forwarding could not capture the full message context. Open your personal Message Screener chat and paste the message manually."));
+                "Forwarding could not capture the full message context. Please retry from the message action."));
         }
 
         TeamsInboundMessage forwardedMessage = CreateInboundMessage(forwardedRequest);
 
         try
         {
+            if (!string.IsNullOrWhiteSpace(serviceUrl) &&
+                !string.IsNullOrWhiteSpace(fromId) &&
+                !string.IsNullOrWhiteSpace(botId))
+            {
+                await personalReviewConversationBootstrapper.EnsureConversationAsync(
+                    serviceUrl,
+                    fromId,
+                    fromDisplayName ?? "Message Screener user",
+                    botId,
+                    cancellationToken);
+            }
+
             InboundProcessingOutcome processingOutcome = await ProcessInboundMessageAsync(
                 forwardedMessage,
                 intakeService,
@@ -257,7 +276,7 @@ app.MapPost("/api/messages", async (
         {
             logger.LogError(ex, "Failed to process composeExtension submit action.");
             return Results.Ok(CreateComposeExtensionStatus(
-                "Message Screener is temporarily unavailable for this action. Open your personal Message Screener chat and paste the message manually."));
+                "Message Screener is temporarily unavailable for this action. Please retry from the message action."));
         }
     }
 
@@ -271,7 +290,9 @@ app.MapPost("/api/messages", async (
         !string.IsNullOrWhiteSpace(conversationId) &&
         !string.IsNullOrWhiteSpace(serviceUrl))
     {
-        personalReviewConversationRegistry.Remember(conversationId, serviceUrl);
+        await personalReviewConversationRegistry.RememberAsync(
+            new PersonalReviewConversationContext(conversationId, serviceUrl),
+            cancellationToken);
     }
 
     string normalizedText = incomingText.Trim();
@@ -695,8 +716,8 @@ static string CreateComposeExtensionStatusText(InboundProcessingOutcome outcome)
     {
         ReviewDeliveryStatus.Delivered => "Message forwarded to Message Screener.",
         ReviewDeliveryStatus.SkippedAutoReplyDisabled => "Forward received, but automatic review delivery is disabled.",
-        ReviewDeliveryStatus.SkippedMissingConversationId => "Forward received, but personal Message Screener destination is not configured yet. Open personal chat and send 'help'.",
-        ReviewDeliveryStatus.SkippedMissingServiceUrl => "Forward received, but bot service URL is missing for delivery. Open personal chat and send 'help'.",
+        ReviewDeliveryStatus.SkippedMissingConversationId => "Forward received, but Message Screener could not open the personal review chat automatically. Please retry from the message action.",
+        ReviewDeliveryStatus.SkippedMissingServiceUrl => "Forward received, but Message Screener could not open the personal review chat automatically. Please retry from the message action.",
         ReviewDeliveryStatus.FailedToDeliver => "Forward received, but delivery to Message Screener failed. Please retry from message actions.",
         _ => "Forward received.",
     };
