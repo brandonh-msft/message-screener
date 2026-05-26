@@ -8,7 +8,7 @@ This overlay standardizes how engineering work is executed in this repository.
 - Prefer managed identity over secrets wherever possible.
 - Make observability first-class with OpenTelemetry traces, metrics, and logs.
 - Use source-generated structured logging for runtime paths.
-- Avoid hidden side effects and automatic send/commit/deploy behaviors.
+- Avoid hidden side effects and automatic send/deploy behaviors.
 
 ## Guardrails
 
@@ -24,6 +24,7 @@ This overlay standardizes how engineering work is executed in this repository.
 - Telemetry baseline: OpenTelemetry at startup with consistent resource attributes.
 - Logging baseline: source-generated logging with stable event IDs and no sensitive payload logging.
 - Delivery baseline: phased delivery with measurable gates and explicit rollback plan.
+- Commit baseline: agents must commit incrementally in small, atomic commits as each logical unit of work completes.
 
 ## Definition of Ready For New Work
 

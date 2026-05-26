@@ -19,3 +19,5 @@ Default behavior requirements:
 
 Execution expectation:
 - Treat the checklist in .digital-twin/implementation-checklist.md as required quality gates before considering work complete.
+- Commit work continuously in small, atomic commits as each logical unit is completed.
+- Do not wait to batch all changes at the end of a session; keep the branch in a regularly committed state.
