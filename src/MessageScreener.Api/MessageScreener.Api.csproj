@@ -25,7 +25,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="config\**\*">
+    <Content Include="copilot-config\**\*.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Update="copilot-config\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>

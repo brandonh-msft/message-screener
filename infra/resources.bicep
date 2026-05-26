@@ -170,7 +170,7 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
           }
           {
             name: 'MessageScreener__Copilot__ConfigDirectory'
-            value: '.'
+            value: 'copilot-config'
           }
           {
             name: 'MessageScreener__Copilot__EnableConfigDiscovery'
@@ -178,15 +178,11 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
           }
           {
             name: 'MessageScreener__Copilot__SystemPromptPath'
-            value: 'config/copilot-reply.system.prompt.md'
+            value: 'copilot-config/prompts/copilot-reply.system.prompt.md'
           }
           {
             name: 'MessageScreener__Copilot__SkillDirectories__0'
-            value: '.github/skills'
-          }
-          {
-            name: 'MessageScreener__Copilot__SkillDirectories__1'
-            value: 'config/skills'
+            value: 'copilot-config/skills'
           }
           {
             name: 'MessageScreener__Copilot__MessageMode'
