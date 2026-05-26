@@ -219,6 +219,12 @@ app.MapPost("/api/messages", async (
         activityId ?? "unknown",
         !string.IsNullOrWhiteSpace(incomingText));
 
+    logger.LogInformation(
+        "Bot webhook invoke metadata. invokeName={InvokeName} serviceUrlPresent={HasServiceUrl} conversationIdPresent={HasConversationId}",
+        invokeName ?? "unknown",
+        !string.IsNullOrWhiteSpace(serviceUrl),
+        !string.IsNullOrWhiteSpace(conversationId));
+
     if (string.Equals(activityType, "invoke", StringComparison.OrdinalIgnoreCase) &&
         string.Equals(invokeName, "composeExtension/submitAction", StringComparison.OrdinalIgnoreCase))
     {
@@ -629,6 +635,11 @@ static object CreateComposeExtensionStatus(string text)
 {
     return new
     {
+        task = new
+        {
+            type = "message",
+            value = text,
+        },
         composeExtension = new
         {
             type = "message",
