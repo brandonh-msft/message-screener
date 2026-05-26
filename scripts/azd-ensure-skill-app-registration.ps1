@@ -146,6 +146,69 @@ if (-not [string]::IsNullOrWhiteSpace($skillAppId) -and -not [string]::IsNullOrW
     $identifierUri = "api://$skillAppId"
     az ad app update --id $skillAppId --web-home-page-url $manifestUrl --identifier-uris $identifierUri | Out-Null
     Write-Host "Ensured identifier URI for skill app registration: $identifierUri"
+
+    $app = az ad app show --id $skillAppId -o json | ConvertFrom-Json
+    $scopeValue = 'access_as_user'
+    $scopeExists = $false
+    foreach ($scope in $app.api.oauth2PermissionScopes) {
+        if ($scope.value -eq $scopeValue) {
+            $scopeExists = $true
+            break
+        }
+    }
+
+    $roleValue = 'Skill.Invoke'
+    $roleExists = $false
+    foreach ($role in $app.appRoles) {
+        if ($role.value -eq $roleValue) {
+            $roleExists = $true
+            break
+        }
+    }
+
+    if (-not $scopeExists -or -not $roleExists) {
+        Write-Host 'Ensuring skill app exposes API scope and app role for token audience compatibility.'
+        $scopeId = [Guid]::NewGuid().ToString()
+        $roleId = [Guid]::NewGuid().ToString()
+        $patchBody = @{
+            api = @{
+                oauth2PermissionScopes = @(
+                    @{
+                        id = $scopeId
+                        adminConsentDisplayName = 'Access Message Screener skill'
+                        adminConsentDescription = 'Allows callers to invoke Message Screener skill operations.'
+                        userConsentDisplayName = 'Access Message Screener skill'
+                        userConsentDescription = 'Allows this app to invoke Message Screener skill operations.'
+                        value = $scopeValue
+                        type = 'User'
+                        isEnabled = $true
+                    }
+                )
+            }
+            appRoles = @(
+                @{
+                    id = $roleId
+                    allowedMemberTypes = @('Application')
+                    description = 'Allows applications to invoke Message Screener skill operations.'
+                    displayName = 'Invoke Message Screener skill'
+                    value = $roleValue
+                    isEnabled = $true
+                }
+            )
+        } | ConvertTo-Json -Depth 8
+
+        $appObjectId = [string]$app.id
+        $tempFile = [System.IO.Path]::GetTempFileName()
+        try {
+            Set-Content -Path $tempFile -Value $patchBody -Encoding utf8
+            az rest --method PATCH --url "https://graph.microsoft.com/v1.0/applications/$appObjectId" --headers "Content-Type=application/json" --body "@$tempFile" | Out-Null
+        }
+        finally {
+            if (Test-Path $tempFile) {
+                Remove-Item -Path $tempFile -Force
+            }
+        }
+    }
 }
 elseif ($UpdateHomepageOnly) {
     Write-Warning 'Skipped homepage update because skill app ID or public base URL was not available yet.'
