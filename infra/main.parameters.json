@@ -25,6 +25,9 @@
       },
       "copilotAgent": {
         "value": "${MESSAGE_SCREENER_COPILOT_AGENT=message-screener-researcher}"
+      },
+      "skillAppId": {
+        "value": "${MESSAGE_SCREENER_SKILL_APP_ID=}"
       }
     }
 }

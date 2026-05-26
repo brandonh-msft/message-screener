@@ -184,15 +184,21 @@ azd env set MESSAGE_SCREENER_GITHUB_TOKEN <github-token>
 azd env set MESSAGE_SCREENER_PUBLIC_BASE_URL https://<deployed-api-url>
 ```
 
+`azd up` now provisions and configures a single-tenant Microsoft Entra app registration for Copilot Studio skill usage automatically via lifecycle hooks. The skill app ID is persisted into the azd environment as `MESSAGE_SCREENER_SKILL_APP_ID` and injected into runtime config.
+
 Optional configuration:
 
 ```powershell
 azd env set MESSAGE_SCREENER_COPILOT_MODEL gpt-4.1
 azd env set MESSAGE_SCREENER_COPILOT_AGENT message-screener-researcher
-azd env set MessageScreener__Skill__AppId <single-tenant-entra-app-id-for-skill>
-azd env set MessageScreener__Skill__PublicBaseUrl https://<deployed-api-url>
 azd env set MESSAGE_SCREENER_PERSONAL_REVIEW_CONVERSATION_ID <teams-chat-id>
 azd env set MESSAGE_SCREENER_AUDIT_OWNER_READ_API_KEY <key-for-audit-reads>
+```
+
+If you need to override the automatically provisioned skill app registration, set:
+
+```powershell
+azd env set MESSAGE_SCREENER_SKILL_APP_ID <single-tenant-entra-app-id-for-skill>
 ```
 
 ### M365 Authentication for WorkIQ

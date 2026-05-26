@@ -25,6 +25,9 @@ param copilotModel string = ''
 @description('Optional GitHub Copilot agent override for runtime reply drafting sessions.')
 param copilotAgent string = 'message-screener-researcher'
 
+@description('Optional single-tenant Microsoft Entra application ID used for Copilot Studio skill registration.')
+param skillAppId string = ''
+
 
 param messagescreenerApiExists bool
 
@@ -57,6 +60,7 @@ module resources 'resources.bicep' = {
     githubCopilotToken: githubCopilotToken
     copilotModel: copilotModel
     copilotAgent: copilotAgent
+    skillAppId: skillAppId
   }
 }
 output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = resources.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_NAME
@@ -72,5 +76,6 @@ output MESSAGE_SCREENER_API_ENDPOINT string = resources.outputs.MESSAGE_SCREENER
 output MESSAGE_SCREENER_TEAMS_APP_ID string = resources.outputs.MESSAGE_SCREENER_TEAMS_APP_ID
 output MESSAGE_SCREENER_TEAMS_BOT_ID string = resources.outputs.MESSAGE_SCREENER_TEAMS_BOT_ID
 output MESSAGE_SCREENER_MANAGED_IDENTITY_CLIENT_ID string = resources.outputs.MESSAGE_SCREENER_MANAGED_IDENTITY_CLIENT_ID
+output MESSAGE_SCREENER_SKILL_APP_ID string = resources.outputs.MESSAGE_SCREENER_SKILL_APP_ID
 output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = resources.outputs.AZURE_LOG_ANALYTICS_WORKSPACE_NAME
 output AZURE_BOT_SERVICE_NAME string = resources.outputs.AZURE_BOT_SERVICE_NAME

@@ -3,6 +3,29 @@
 name: message-screener
 metadata:
     template: azd-init@1.25.2
+hooks:
+    preprovision:
+        shell: pwsh
+        run: >-
+            if (Test-Path ./scripts/azd-ensure-skill-app-registration.ps1) {
+              ./scripts/azd-ensure-skill-app-registration.ps1
+            } elseif (Test-Path ../../scripts/azd-ensure-skill-app-registration.ps1) {
+              ../../scripts/azd-ensure-skill-app-registration.ps1
+            } else {
+              throw 'Could not locate scripts/azd-ensure-skill-app-registration.ps1 from current working directory.'
+            }
+        continueOnError: false
+    postprovision:
+        shell: pwsh
+        run: >-
+            if (Test-Path ./scripts/azd-ensure-skill-app-registration.ps1) {
+              ./scripts/azd-ensure-skill-app-registration.ps1 -UpdateHomepageOnly
+            } elseif (Test-Path ../../scripts/azd-ensure-skill-app-registration.ps1) {
+              ../../scripts/azd-ensure-skill-app-registration.ps1 -UpdateHomepageOnly
+            } else {
+              throw 'Could not locate scripts/azd-ensure-skill-app-registration.ps1 from current working directory.'
+            }
+        continueOnError: false
 services:
     messagescreener-api:
         project: src/MessageScreener.Api

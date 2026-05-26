@@ -23,6 +23,9 @@ param copilotModel string = ''
 @description('Optional GitHub Copilot agent override for runtime reply drafting sessions.')
 param copilotAgent string = 'message-screener-researcher'
 
+@description('Optional single-tenant Microsoft Entra application ID used for Copilot Studio skill registration.')
+param skillAppId string = ''
+
 
 param messagescreenerApiExists bool
 
@@ -193,6 +196,14 @@ module messagescreenerApi 'br/public:avm/res/app/container-app:0.8.0' = {
             value: 'interactive'
           }
           {
+            name: 'MessageScreener__Skill__AppId'
+            value: skillAppId
+          }
+          {
+            name: 'MessageScreener__Skill__PublicBaseUrl'
+            value: 'https://${messagescreenerApiResource.properties.configuration.ingress.fqdn}'
+          }
+          {
             name: 'PORT'
             value: '8080'
           }
@@ -265,5 +276,6 @@ output MESSAGE_SCREENER_API_ENDPOINT string = 'https://${messagescreenerApiResou
 output MESSAGE_SCREENER_TEAMS_APP_ID string = resolvedTeamsAppId
 output MESSAGE_SCREENER_TEAMS_BOT_ID string = messagescreenerApiIdentity.outputs.clientId
 output MESSAGE_SCREENER_MANAGED_IDENTITY_CLIENT_ID string = messagescreenerApiIdentity.outputs.clientId
+output MESSAGE_SCREENER_SKILL_APP_ID string = skillAppId
 output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = workspaceName
 output AZURE_BOT_SERVICE_NAME string = botService.name
