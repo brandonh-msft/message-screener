@@ -158,13 +158,15 @@ function Update-AzdEnvironment {
     )
     
     Write-Status "Updating azd environment variables"
-    
+
     azd env set MESSAGE_SCREENER_M365_CLIENT_ID $ClientId 2>&1 | Out-Null
     azd env set MESSAGE_SCREENER_M365_CLIENT_SECRET $ClientSecret 2>&1 | Out-Null
     azd env set MESSAGE_SCREENER_M365_TENANT_ID $TenantId 2>&1 | Out-Null
-    azd env set m365ClientId $ClientId 2>&1 | Out-Null
-    azd env set m365ClientSecret $ClientSecret 2>&1 | Out-Null
-    azd env set m365TenantId $TenantId 2>&1 | Out-Null
+
+    # Greenfield cleanup: clear previously used non-idiomatic aliases.
+    azd env set m365ClientId "" 2>&1 | Out-Null
+    azd env set m365ClientSecret "" 2>&1 | Out-Null
+    azd env set m365TenantId "" 2>&1 | Out-Null
     
     Write-Status "Environment variables updated." -Level "Success"
 }

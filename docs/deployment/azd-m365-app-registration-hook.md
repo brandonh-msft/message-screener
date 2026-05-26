@@ -53,7 +53,7 @@ hooks:
    - Sets `MESSAGE_SCREENER_M365_CLIENT_ID`
    - Sets `MESSAGE_SCREENER_M365_CLIENT_SECRET`
    - Sets `MESSAGE_SCREENER_M365_TENANT_ID`
-  - Sets infra params `m365ClientId`, `m365ClientSecret`, `m365TenantId`
+  - Sets canonical azd env keys consumed by infra parameter mapping
 
 ## Usage
 
@@ -288,4 +288,3 @@ After the hook completes, `.NET appsettings` are configured via `azd deploy`:
 - [azd Hooks](https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/azd-reference#hooks)
 - [Azure CLI App Registration](https://learn.microsoft.com/en-us/cli/azure/ad/app?view=azure-cli-latest)
 - [OAuth 2.0 Device Flow](https://datatracker.ietf.org/doc/html/rfc8628)
-
