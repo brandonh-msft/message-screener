@@ -189,6 +189,8 @@ Optional configuration:
 ```powershell
 azd env set MESSAGE_SCREENER_COPILOT_MODEL gpt-4.1
 azd env set MESSAGE_SCREENER_COPILOT_AGENT message-screener-researcher
+azd env set MessageScreener__Skill__AppId <single-tenant-entra-app-id-for-skill>
+azd env set MessageScreener__Skill__PublicBaseUrl https://<deployed-api-url>
 azd env set MESSAGE_SCREENER_PERSONAL_REVIEW_CONVERSATION_ID <teams-chat-id>
 azd env set MESSAGE_SCREENER_AUDIT_OWNER_READ_API_KEY <key-for-audit-reads>
 ```
@@ -334,6 +336,11 @@ For Copilot Studio skill registration, use:
 
 - Manifest URL: `https://<your-host>/manifest/message-screener-communication-twin-skill-1.0.json`
 - Skill endpoint: `https://<your-host>/api/skills/communication-twin/messages`
+
+Copilot Studio skill validation prerequisites:
+
+- `MessageScreener__Skill__AppId` must be a single-tenant Microsoft Entra app registration App ID in the same tenant as the Copilot Studio agent.
+- The app registration Home page URL domain must match your manifest/endpoint domain.
 
 `MESSAGE_SCREENER_TEAMS_BOT_ID` is produced by infra deployment from the managed identity client ID and does not need to be set manually.
 

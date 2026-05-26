@@ -37,6 +37,9 @@ builder.Services
 builder.Services
     .AddOptions<MessageScreenerAuditOptions>()
     .BindConfiguration(MessageScreenerAuditOptions.SectionName);
+builder.Services
+    .AddOptions<MessageScreenerSkillOptions>()
+    .BindConfiguration(MessageScreenerSkillOptions.SectionName);
 builder.Services.AddSingleton<IInboundEventStore, InMemoryInboundEventStore>();
 builder.Services.AddSingleton<IForwardAuditStore, InMemoryForwardAuditStore>();
 builder.Services.AddSingleton<ITriggerPolicy, TeamsTriggerPolicy>();
@@ -94,6 +97,10 @@ app.MapGet("/health", () => Results.Ok(new
     status = "ok",
     utcTimestamp = DateTimeOffset.UtcNow,
 }));
+
+app.MapGet("/privacy", () => Results.Text(
+    "Message Screener processes message context to generate review-first drafts and skill responses. No automatic sends are performed.",
+    "text/plain"));
 
 app.MapGet("/api/audit/forwards", async (
     HttpRequest request,
@@ -173,7 +180,7 @@ app.MapPost("/api/skills/communication-twin/messages", async (
     IGhcpAgentHarness ghcpAgentHarness,
     CancellationToken cancellationToken) =>
 {
-    return await RewriteInUserVoiceAsync(
+    return await RewriteInUserVoiceSkillAsync(
         request,
         copilotReplyDraftingService,
         communicationTwinService,
@@ -183,21 +190,27 @@ app.MapPost("/api/skills/communication-twin/messages", async (
 
 app.MapGet("/manifest/message-screener-communication-twin-skill-1.0.json", (
     HttpRequest request,
-    IOptions<MessageScreenerTeamsOptions> teamsOptions) =>
+    IOptions<MessageScreenerTeamsOptions> teamsOptions,
+    IOptions<MessageScreenerSkillOptions> skillOptions) =>
 {
-    string? appId = teamsOptions.Value.ManagedIdentityClientId;
+    string? appId = FirstNonEmpty(skillOptions.Value.AppId, teamsOptions.Value.ManagedIdentityClientId);
     if (string.IsNullOrWhiteSpace(appId))
     {
         return Results.Problem(
             title: "Skill manifest is unavailable",
-            detail: "Configure MessageScreener:Teams:ManagedIdentityClientId to expose a valid Copilot Studio skill manifest.",
+            detail: "Configure MessageScreener:Skill:AppId to a single-tenant Entra app registration App ID for Copilot Studio skill validation.",
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
-    string? configuredPublicBaseUrl = Environment.GetEnvironmentVariable("MESSAGE_SCREENER_PUBLIC_BASE_URL");
-    string baseUrl = !string.IsNullOrWhiteSpace(configuredPublicBaseUrl)
-        ? configuredPublicBaseUrl.TrimEnd('/')
-        : $"https://{request.Host}".TrimEnd('/');
+    if (!Guid.TryParse(appId, out _))
+    {
+        return Results.Problem(
+            title: "Skill manifest is unavailable",
+            detail: "MessageScreener:Skill:AppId must be a valid GUID App ID.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    string baseUrl = ResolvePublicBaseUrl(request, skillOptions.Value.PublicBaseUrl);
     string endpointUrl = $"{baseUrl}/api/skills/communication-twin/messages";
 
     Dictionary<string, object?> manifest = new()
@@ -525,6 +538,115 @@ static async ValueTask<IResult> RewriteInUserVoiceAsync(
     }
 }
 
+static async ValueTask<IResult> RewriteInUserVoiceSkillAsync(
+    HttpRequest request,
+    ICopilotReplyDraftingService copilotReplyDraftingService,
+    ICommunicationTwinService communicationTwinService,
+    IGhcpAgentHarness ghcpAgentHarness,
+    CancellationToken cancellationToken)
+{
+    JsonDocument payload;
+    try
+    {
+        payload = await JsonDocument.ParseAsync(request.Body, cancellationToken: cancellationToken);
+    }
+    catch (JsonException)
+    {
+        return Results.BadRequest(new { error = "invalid_json" });
+    }
+
+    using (payload)
+    {
+        JsonElement root = payload.RootElement;
+        string? activityType = GetJsonString(root, "type");
+        string? activityName = GetJsonString(root, "name");
+
+        if (string.Equals(activityType, "endOfConversation", StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Ok(new { type = "endOfConversation", code = "completedSuccessfully" });
+        }
+
+        if (!string.IsNullOrWhiteSpace(activityType) &&
+            !string.Equals(activityType, "event", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(activityType, "invoke", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(activityType, "message", StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Ok(new
+            {
+                type = "endOfConversation",
+                code = "completedSuccessfully",
+                value = new
+                {
+                    error = "unsupported_activity_type",
+                    detail = $"Activity type '{activityType}' is not supported by this skill endpoint.",
+                }
+            });
+        }
+
+        if ((string.Equals(activityType, "event", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(activityType, "invoke", StringComparison.OrdinalIgnoreCase)) &&
+            !string.Equals(activityName, RewriteInUserVoiceSkillActivityId, StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Ok(new
+            {
+                type = "endOfConversation",
+                code = "completedSuccessfully",
+                value = new
+                {
+                    error = "unsupported_activity_name",
+                    detail = $"Activity name '{activityName ?? "<null>"}' is not supported.",
+                }
+            });
+        }
+
+        if (!TryParseCommunicationTwinRewriteRequest(root, out CommunicationTwinRewriteRequest? rewriteRequest))
+        {
+            return Results.Ok(new
+            {
+                type = "endOfConversation",
+                code = "completedSuccessfully",
+                value = new
+                {
+                    error = "invalid_rewrite_request",
+                    detail = "Provide sourceKind, sourceText, suggestedResponse, and optional supportingEvidence.",
+                }
+            });
+        }
+
+        if (!TryValidateRewriteRequest(rewriteRequest, out string? validationError))
+        {
+            return Results.Ok(new
+            {
+                type = "endOfConversation",
+                code = "completedSuccessfully",
+                value = new
+                {
+                    error = "invalid_rewrite_request",
+                    detail = validationError,
+                }
+            });
+        }
+
+        CommunicationTwinProfile profile = communicationTwinService.GetInitialProfile();
+        string? communicationTwinSkillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+        string rewrittenResponse = await copilotReplyDraftingService.RewriteInUserVoiceAsync(
+            rewriteRequest!,
+            profile,
+            communicationTwinSkillContent,
+            cancellationToken);
+
+        return Results.Ok(new
+        {
+            type = "endOfConversation",
+            code = "completedSuccessfully",
+            value = new CommunicationTwinRewriteResponse(
+                RewrittenResponse: rewrittenResponse,
+                OwnerDisplayName: profile.OwnerDisplayName,
+                Tone: profile.Tone),
+        });
+    }
+}
+
 static bool TryValidateRewriteRequest(CommunicationTwinRewriteRequest? request, out string? validationError)
 {
     validationError = null;
@@ -697,6 +819,18 @@ static bool TryBuildRewriteRequestFromJson(
         SuggestedResponse: suggestedResponseElement.GetString()?.Trim() ?? string.Empty,
         SupportingEvidence: supportingEvidence.ToArray());
     return true;
+}
+
+static string ResolvePublicBaseUrl(HttpRequest request, string? configuredPublicBaseUrl)
+{
+    string? environmentPublicBaseUrl = Environment.GetEnvironmentVariable("MESSAGE_SCREENER_PUBLIC_BASE_URL");
+    string? selected = FirstNonEmpty(configuredPublicBaseUrl, environmentPublicBaseUrl);
+    if (!string.IsNullOrWhiteSpace(selected))
+    {
+        return selected.TrimEnd('/');
+    }
+
+    return $"https://{request.Host}".TrimEnd('/');
 }
 
 static ForwardAuditEntry CreateForwardAuditEntry(TeamsInboundMessage message, MessageIntakeResult intakeResult)
