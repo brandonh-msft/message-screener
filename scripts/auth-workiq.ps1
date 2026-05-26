@@ -155,7 +155,7 @@ try {
         $errorText = Read-ProblemDetail -ErrorRecord $_
 
         if ($statusCode -eq 400) {
-            throw "Initiate request failed (400): $errorText. Ensure M365 app registration completed and these azd env values exist for the deployed app: MESSAGE_SCREENER_M365_CLIENT_ID, MESSAGE_SCREENER_M365_CLIENT_SECRET, MESSAGE_SCREENER_M365_TENANT_ID."
+            throw "Initiate request failed (400): $errorText. This usually means the deployed app is missing MessageScreener__M365Auth runtime settings. Re-run provision/deploy with the latest infra so m365ClientId/m365ClientSecret/m365TenantId are passed into the container app environment."
         }
 
         throw "Initiate request failed: $errorText"

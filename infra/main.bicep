@@ -19,6 +19,16 @@ param personalReviewConversationId string = ''
 @description('Optional GitHub token used by GitHub Copilot SDK runtime sessions in deployed container environments.')
 param githubCopilotToken string = ''
 
+@description('Optional M365 client ID written by the postprovision hook for auth configuration.')
+param m365ClientId string = ''
+
+@secure()
+@description('Optional M365 client secret written by the postprovision hook for auth configuration.')
+param m365ClientSecret string = ''
+
+@description('Optional M365 tenant ID written by the postprovision hook for auth configuration.')
+param m365TenantId string = ''
+
 @description('Optional GitHub Copilot model override for runtime reply drafting sessions.')
 param copilotModel string = ''
 
@@ -55,6 +65,9 @@ module resources 'resources.bicep' = {
     teamsAppId: teamsAppId
     personalReviewConversationId: personalReviewConversationId
     githubCopilotToken: githubCopilotToken
+    m365ClientId: m365ClientId
+    m365ClientSecret: m365ClientSecret
+    m365TenantId: m365TenantId
     copilotModel: copilotModel
     copilotAgent: copilotAgent
   }

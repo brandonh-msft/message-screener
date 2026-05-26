@@ -20,6 +20,15 @@
       "githubCopilotToken": {
         "value": "${MESSAGE_SCREENER_GITHUB_TOKEN=}"
       },
+      "m365ClientId": {
+        "value": "${m365ClientId=}"
+      },
+      "m365ClientSecret": {
+        "value": "${m365ClientSecret=}"
+      },
+      "m365TenantId": {
+        "value": "${m365TenantId=}"
+      },
       "copilotModel": {
         "value": "${MESSAGE_SCREENER_COPILOT_MODEL=}"
       },
