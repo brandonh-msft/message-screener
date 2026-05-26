@@ -3,7 +3,7 @@
 Registers an M365 OAuth2 app in Entra ID for WorkIQ MCP integration.
 
 .DESCRIPTION
-Automated M365 app registration for Message Screener, run as part of azd postprovision.
+Automated M365 app registration for Message Screener, run as part of azd preprovision.
 Handles app creation and secret generation with SFI defaults.
 
 .PARAMETER SkipIfExists
@@ -197,13 +197,13 @@ try {
     }
     Write-Status "Tenant ID: $tenantId"
     
-    # Determine reply URL from azd environment
+    # Determine reply URL from azd environment.
+    # Device-code flow used by this project does not require redirect URI at runtime.
+    # We still register one for future compatibility, but do not fail if API URL is not yet known.
     $apiBase = $env:MESSAGE_SCREENER_PUBLIC_BASE_URL
     if ([string]::IsNullOrWhiteSpace($apiBase)) {
-        # Fallback: construct from resource group (assumes standard naming)
-        $resourceGroup = $env:AZURE_RESOURCE_GROUP
-        $apiBase = "https://messagescreener-$resourceGroup.azurecontainerapps.io"
-        Write-Status "API base URL not found in env, using fallback: $apiBase" -Level "Warn"
+        $apiBase = "https://localhost"
+        Write-Status "API base URL not found in env. Using placeholder redirect base: $apiBase (safe for device-code flow)." -Level "Warn"
     }
     $replyUrl = "$apiBase/auth/m365/callback"
     Write-Status "Reply URL: $replyUrl"

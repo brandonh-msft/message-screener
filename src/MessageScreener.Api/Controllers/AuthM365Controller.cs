@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MessageScreener.Orchestration;
+using System.Collections.Generic;
 
 namespace MessageScreener.Api.Controllers;
 
@@ -33,13 +34,9 @@ public sealed class AuthM365Controller(
         [FromServices] IOptions<M365TokenProviderOptions> options,
         CancellationToken cancellationToken)
     {
-        if (!options.Value.Enabled)
+        if (TryCreateM365ConfigurationProblem(options.Value, out ProblemDetails? configProblem))
         {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "M365 Authentication Disabled",
-                Detail = "M365 authentication is not configured on this instance."
-            });
+            return BadRequest(configProblem);
         }
 
         try
@@ -112,6 +109,11 @@ public sealed class AuthM365Controller(
         [FromServices] IOptions<M365TokenProviderOptions> options,
         CancellationToken cancellationToken)
     {
+        if (TryCreateM365ConfigurationProblem(options.Value, out ProblemDetails? configProblem))
+        {
+            return BadRequest(configProblem);
+        }
+
         if (string.IsNullOrWhiteSpace(request.DeviceCode))
         {
             return BadRequest(new ProblemDetails
@@ -229,15 +231,63 @@ public sealed class AuthM365Controller(
     /// </summary>
     [HttpGet("status")]
     [ProducesResponseType(typeof(M365AuthStatusResponse), StatusCodes.Status200OK)]
-    public async Task<IActionResult> StatusAsync(CancellationToken cancellationToken)
+    public async Task<IActionResult> StatusAsync(
+        [FromServices] IOptions<M365TokenProviderOptions> options,
+        CancellationToken cancellationToken)
     {
+        bool hasConfigError = TryCreateM365ConfigurationProblem(options.Value, out ProblemDetails? configProblem);
+
         bool hasAuth = await m365TokenProvider.HasValidM365AuthAsync(cancellationToken);
 
         return Ok(new M365AuthStatusResponse(
             IsConfigured: hasAuth,
             Message: hasAuth
                 ? "M365 authentication is configured. WorkIQ can access your data."
-                : "M365 authentication is not configured. Please authenticate via POST /api/authm365/initiate."));
+                : hasConfigError
+                    ? configProblem!.Detail ?? "M365 authentication is not configured."
+                    : "M365 authentication is not configured. Please authenticate via POST /api/authm365/initiate."));
+    }
+
+    private static bool TryCreateM365ConfigurationProblem(
+        M365TokenProviderOptions options,
+        out ProblemDetails? problem)
+    {
+        List<string> issues = [];
+
+        if (!options.Enabled)
+        {
+            issues.Add("MessageScreener__M365Auth__Enabled is false.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.ClientId))
+        {
+            issues.Add("MessageScreener__M365Auth__ClientId is missing.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.ClientSecret))
+        {
+            issues.Add("MessageScreener__M365Auth__ClientSecret is missing.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.TenantId))
+        {
+            issues.Add("MessageScreener__M365Auth__TenantId is missing.");
+        }
+
+        if (issues.Count == 0)
+        {
+            problem = null;
+            return false;
+        }
+
+        problem = new ProblemDetails
+        {
+            Title = "M365 Authentication Misconfigured",
+            Detail = $"M365 auth cannot start because runtime configuration is incomplete. {string.Join(" ", issues)}",
+            Status = StatusCodes.Status400BadRequest
+        };
+
+        return true;
     }
 }
 

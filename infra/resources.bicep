@@ -17,14 +17,14 @@ param personalReviewConversationId string = ''
 @description('Optional GitHub token used by GitHub Copilot SDK runtime sessions in deployed container environments.')
 param githubCopilotToken string = ''
 
-@description('Optional M365 client ID written by the postprovision hook for Key Vault seeding.')
+@description('Optional M365 client ID written by the preprovision hook for Key Vault seeding and runtime config.')
 param m365ClientId string = ''
 
 @secure()
-@description('Optional M365 client secret written by the postprovision hook for Key Vault seeding.')
+@description('Optional M365 client secret written by the preprovision hook for Key Vault seeding and runtime config.')
 param m365ClientSecret string = ''
 
-@description('Optional M365 tenant ID written by the postprovision hook for Key Vault seeding.')
+@description('Optional M365 tenant ID written by the preprovision hook for Key Vault seeding and runtime config.')
 param m365TenantId string = ''
 
 @description('Optional GitHub Copilot model override for runtime reply drafting sessions.')
