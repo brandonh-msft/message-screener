@@ -11,7 +11,7 @@ namespace MessageScreener.Orchestration
 
         ValueTask<IReadOnlyList<GhcpSkillDefinition>> GetSkillCatalogAsync(CancellationToken cancellationToken);
 
-        ValueTask<string?> GetCommunicationTwinSkillContentAsync(CancellationToken cancellationToken);
+        ValueTask<string?> GetCommunicationTwinPromptContentAsync(CancellationToken cancellationToken);
     }
 
     public sealed class GhcpAgentHarness(
@@ -84,16 +84,16 @@ namespace MessageScreener.Orchestration
             }
         }
 
-        public ValueTask<string?> GetCommunicationTwinSkillContentAsync(CancellationToken cancellationToken)
+        public ValueTask<string?> GetCommunicationTwinPromptContentAsync(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var configuredPath = options.Value.CommunicationTwinSkillPath;
+            var configuredPath = options.Value.CommunicationTwinPromptPath;
             var fullPath = ResolvePath(configuredPath);
 
             if (!File.Exists(fullPath))
             {
-                CopilotHarnessLog.CommunicationTwinSkillMissing(logger, fullPath);
+                CopilotHarnessLog.CommunicationTwinPromptMissing(logger, fullPath);
                 return ValueTask.FromResult<string?>(null);
             }
 

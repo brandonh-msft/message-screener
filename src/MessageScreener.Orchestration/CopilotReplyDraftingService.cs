@@ -34,19 +34,19 @@ public interface ICopilotReplyDraftingService
     ValueTask<string> DraftReplyAsync(
         TeamsInboundMessage message,
         CommunicationTwinProfile profile,
-        string? communicationTwinSkillContent,
+        string? communicationTwinPromptContent,
         CancellationToken cancellationToken);
 
     ValueTask<CopilotDraftProbeResult> ProbeDraftAsync(
         TeamsInboundMessage message,
         CommunicationTwinProfile profile,
-        string? communicationTwinSkillContent,
+        string? communicationTwinPromptContent,
         CancellationToken cancellationToken);
 
     ValueTask<string> RewriteInUserVoiceAsync(
         CommunicationTwinRewriteRequest request,
         CommunicationTwinProfile profile,
-        string? communicationTwinSkillContent,
+        string? communicationTwinPromptContent,
         CancellationToken cancellationToken);
 }
 
@@ -59,13 +59,13 @@ public sealed class CopilotReplyDraftingService(
     public async ValueTask<string> DraftReplyAsync(
         TeamsInboundMessage message,
         CommunicationTwinProfile profile,
-        string? communicationTwinSkillContent,
+        string? communicationTwinPromptContent,
         CancellationToken cancellationToken)
     {
         CopilotDraftProbeResult probe = await ProbeDraftAsync(
             message,
             profile,
-            communicationTwinSkillContent,
+            communicationTwinPromptContent,
             cancellationToken);
 
         if (probe.Success)
@@ -79,13 +79,13 @@ public sealed class CopilotReplyDraftingService(
     public async ValueTask<CopilotDraftProbeResult> ProbeDraftAsync(
         TeamsInboundMessage message,
         CommunicationTwinProfile profile,
-        string? communicationTwinSkillContent,
+        string? communicationTwinPromptContent,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         string systemPrompt = LoadSystemPrompt(options.Value.SystemPromptPath);
-        string userPrompt = BuildUserPrompt(message, profile, communicationTwinSkillContent);
+        string userPrompt = BuildUserPrompt(message, profile, communicationTwinPromptContent);
         string configDirectory = ResolvePath(options.Value.ConfigDirectory);
         List<string> skillDirectories = ResolveSkillDirectories(options.Value.SkillDirectories);
 
@@ -142,13 +142,13 @@ public sealed class CopilotReplyDraftingService(
     public async ValueTask<string> RewriteInUserVoiceAsync(
         CommunicationTwinRewriteRequest request,
         CommunicationTwinProfile profile,
-        string? communicationTwinSkillContent,
+        string? communicationTwinPromptContent,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         string systemPrompt = LoadSystemPrompt(options.Value.SystemPromptPath);
-        string userPrompt = BuildRewriteUserPrompt(request, profile, communicationTwinSkillContent);
+        string userPrompt = BuildRewriteUserPrompt(request, profile, communicationTwinPromptContent);
         string configDirectory = ResolvePath(options.Value.ConfigDirectory);
         List<string> skillDirectories = ResolveSkillDirectories(options.Value.SkillDirectories);
 
@@ -209,7 +209,7 @@ public sealed class CopilotReplyDraftingService(
     private static string BuildUserPrompt(
         TeamsInboundMessage message,
         CommunicationTwinProfile profile,
-        string? communicationTwinSkillContent)
+        string? communicationTwinPromptContent)
     {
         var builder = new StringBuilder();
         builder.AppendLine("Draft a response the operating user can send after review.");
@@ -222,10 +222,10 @@ public sealed class CopilotReplyDraftingService(
         builder.AppendLine($"- avoid_phrases: {string.Join(", ", profile.AvoidPhrases)}");
         builder.AppendLine();
 
-        if (!string.IsNullOrWhiteSpace(communicationTwinSkillContent))
+        if (!string.IsNullOrWhiteSpace(communicationTwinPromptContent))
         {
-            builder.AppendLine("Communication twin skill content:");
-            builder.AppendLine(communicationTwinSkillContent);
+            builder.AppendLine("Communication twin prompt content:");
+            builder.AppendLine(communicationTwinPromptContent);
             builder.AppendLine();
         }
 
@@ -246,7 +246,7 @@ public sealed class CopilotReplyDraftingService(
     private static string BuildRewriteUserPrompt(
         CommunicationTwinRewriteRequest request,
         CommunicationTwinProfile profile,
-        string? communicationTwinSkillContent)
+        string? communicationTwinPromptContent)
     {
         var builder = new StringBuilder();
         builder.AppendLine("Rewrite the suggested response so it sounds like the operating user while preserving facts and intent.");
@@ -259,10 +259,10 @@ public sealed class CopilotReplyDraftingService(
         builder.AppendLine($"- avoid_phrases: {string.Join(", ", profile.AvoidPhrases)}");
         builder.AppendLine();
 
-        if (!string.IsNullOrWhiteSpace(communicationTwinSkillContent))
+        if (!string.IsNullOrWhiteSpace(communicationTwinPromptContent))
         {
-            builder.AppendLine("Communication twin skill content:");
-            builder.AppendLine(communicationTwinSkillContent);
+            builder.AppendLine("Communication twin prompt content:");
+            builder.AppendLine(communicationTwinPromptContent);
             builder.AppendLine();
         }
 

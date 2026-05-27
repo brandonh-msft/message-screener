@@ -1,5 +1,5 @@
 ---
-title: Communication twin skill becomes the runtime source of truth
+title: Communication twin prompt becomes the runtime source of truth
 problem_type: integration_issue
 track: bug
 category: integration-issues
@@ -16,7 +16,7 @@ tags:
 
 ## Problem
 
-The communication-twin flow had a persistent JSON artifact alongside `SKILL.md`, which made the runtime source of truth ambiguous.
+The communication-twin flow had a persistent JSON artifact alongside the generated prompt file, which made the runtime source of truth ambiguous.
 
 ## Symptoms
 
@@ -32,27 +32,26 @@ The communication-twin flow had a persistent JSON artifact alongside `SKILL.md`,
 
 ## Solution
 
-The runtime now uses `SKILL.md` as the communication-twin source of truth.
+The runtime now uses `communication-twin.prompt.md` as the communication-twin source of truth.
 
 Key changes:
 
 ```csharp
-public string CommunicationTwinSkillPath { get; init; } = "copilot-config/skills/communication-twin/SKILL.md";
+public string CommunicationTwinPromptPath { get; init; } = "copilot-config/prompts/communication-twin.prompt.md";
 ```
 
 ```csharp
-string? skillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+string? skillContent = await ghcpAgentHarness.GetCommunicationTwinPromptContentAsync(cancellationToken);
 ```
 
-`scripts/setup.ps1` now generates the skill and deletes the temporary JSON payload after parsing it.
+`scripts/setup.ps1` now generates the prompt and deletes the temporary JSON payload after parsing it.
 
 ## Why This Works
 
-`SKILL.md` is the artifact the GHCP harness actually loads, so it is the right thing to validate and ship. Removing the extra JSON copy prevents drift between setup output and runtime behavior.
+`communication-twin.prompt.md` is the artifact the GHCP harness actually loads, so it is the right thing to validate and ship. Removing the extra JSON copy prevents drift between setup output and runtime behavior.
 
 ## Prevention
 
 - Keep the runtime contract centered on the file the harness consumes.
 - Delete bootstrap-only outputs after they are transformed into shipped artifacts.
 - Make readiness checks validate the deployed path, not a temporary generator output.
-

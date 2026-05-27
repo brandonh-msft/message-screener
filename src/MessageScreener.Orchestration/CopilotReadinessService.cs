@@ -27,7 +27,7 @@ public sealed class CopilotReadinessService(
 
         List<CopilotReadinessCheck> checks = [];
 
-        checks.Add(await EvaluateCommunicationTwinSkillCheckAsync(cancellationToken));
+        checks.Add(await EvaluateCommunicationTwinPromptCheckAsync(cancellationToken));
         checks.Add(EvaluateTokenCheck(copilotOptions.Value));
 
         IReadOnlyList<McpServerRegistration> mcpServers = await ghcpAgentHarness.GetMcpServersAsync(cancellationToken);
@@ -57,7 +57,7 @@ public sealed class CopilotReadinessService(
         else
         {
             CommunicationTwinProfile profile = communicationTwinService.GetInitialProfile();
-            string? skillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+            string? skillContent = await ghcpAgentHarness.GetCommunicationTwinPromptContentAsync(cancellationToken);
             TeamsInboundMessage probeMessage = CreateProbeMessage();
 
             CopilotDraftProbeResult probe = await copilotReplyDraftingService.ProbeDraftAsync(
@@ -79,21 +79,21 @@ public sealed class CopilotReadinessService(
             Checks: checks);
     }
 
-    private async ValueTask<CopilotReadinessCheck> EvaluateCommunicationTwinSkillCheckAsync(CancellationToken cancellationToken)
+    private async ValueTask<CopilotReadinessCheck> EvaluateCommunicationTwinPromptCheckAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        string? skillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+        string? skillContent = await ghcpAgentHarness.GetCommunicationTwinPromptContentAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(skillContent))
         {
             return new CopilotReadinessCheck(
-                Name: "communication_twin_skill_loaded",
+                Name: "communication_twin_prompt_loaded",
                 Passed: false,
-                Detail: "missing_skill");
+                Detail: "missing_prompt");
         }
 
         return new CopilotReadinessCheck(
-            Name: "communication_twin_skill_loaded",
+            Name: "communication_twin_prompt_loaded",
             Passed: true,
             Detail: "ok");
     }

@@ -507,7 +507,7 @@ static async ValueTask<IResult> RewriteInUserVoiceAsync(
     }
 
     CommunicationTwinProfile profile = communicationTwinService.GetInitialProfile();
-    string? communicationTwinSkillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+    string? communicationTwinSkillContent = await ghcpAgentHarness.GetCommunicationTwinPromptContentAsync(cancellationToken);
     string rewrittenResponse = await copilotReplyDraftingService.RewriteInUserVoiceAsync(
         rewriteRequest,
         profile,
@@ -610,7 +610,7 @@ static async ValueTask<IResult> RewriteInUserVoiceSkillAsync(
         }
 
         CommunicationTwinProfile profile = communicationTwinService.GetInitialProfile();
-        string? communicationTwinSkillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+        string? communicationTwinSkillContent = await ghcpAgentHarness.GetCommunicationTwinPromptContentAsync(cancellationToken);
         string rewrittenResponse = await copilotReplyDraftingService.RewriteInUserVoiceAsync(
             rewriteRequest!,
             profile,

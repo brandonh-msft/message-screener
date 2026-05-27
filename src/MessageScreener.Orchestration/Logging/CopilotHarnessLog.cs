@@ -19,8 +19,8 @@ namespace MessageScreener.Orchestration
         [LoggerMessage(
             EventId = 1022,
             Level = LogLevel.Warning,
-            Message = "Communication twin skill file was not found at {Path}.")]
-        public static partial void CommunicationTwinSkillMissing(ILogger logger, string path);
+            Message = "Communication twin prompt file was not found at {Path}.")]
+        public static partial void CommunicationTwinPromptMissing(ILogger logger, string path);
 
         [LoggerMessage(
             EventId = 1023,

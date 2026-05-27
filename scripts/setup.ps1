@@ -13,9 +13,11 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 Set-Location $repoRoot
 
 $runtimeConfigDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config"
-$runtimeSkillDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config/skills/communication-twin"
-$communicationTwinSkillPath = Join-Path $runtimeSkillDirectory "SKILL.md"
-$communicationTwinPath = Join-Path $runtimeSkillDirectory "communication-twin.json"
+$runtimePromptDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config/prompts"
+$communicationTwinPromptPath = Join-Path $runtimePromptDirectory "communication-twin.prompt.md"
+$legacyCommunicationTwinDirectory = Join-Path $repoRoot "src/MessageScreener.Api/copilot-config/skills/communication-twin"
+$legacyCommunicationTwinPromptPath = Join-Path $legacyCommunicationTwinDirectory "SKILL.md"
+$legacyCommunicationTwinResponsePath = Join-Path $legacyCommunicationTwinDirectory "communication-twin.json"
 $promptPath = Join-Path $repoRoot "scripts/prompts/communication-twin.workiq.prompt.md"
 
 function Resolve-CopilotCliCommand {
@@ -121,20 +123,24 @@ if (-not (Test-Path $runtimeConfigDirectory)) {
     New-Item -Path $runtimeConfigDirectory -ItemType Directory | Out-Null
 }
 
-if (-not (Test-Path $runtimeSkillDirectory)) {
-    New-Item -Path $runtimeSkillDirectory -ItemType Directory -Force | Out-Null
+if (-not (Test-Path $runtimePromptDirectory)) {
+    New-Item -Path $runtimePromptDirectory -ItemType Directory -Force | Out-Null
 }
 
 if (-not (Test-Path $promptPath)) {
     throw "Twin generation prompt was not found at $promptPath"
 }
 
-if ((Test-Path $communicationTwinSkillPath) -and -not $Force) {
-    if (Test-Path $communicationTwinPath) {
-        Remove-Item -Path $communicationTwinPath -Force
+if ((Test-Path $communicationTwinPromptPath) -and -not $Force) {
+    if (Test-Path $legacyCommunicationTwinPromptPath) {
+        Remove-Item -Path $legacyCommunicationTwinPromptPath -Force
     }
 
-    Write-Host "Communication twin skill already exists at $communicationTwinSkillPath"
+    if (Test-Path $legacyCommunicationTwinResponsePath) {
+        Remove-Item -Path $legacyCommunicationTwinResponsePath -Force
+    }
+
+    Write-Host "Communication twin prompt already exists at $communicationTwinPromptPath"
     Write-Host "Use -Force to overwrite it."
     exit 0
 }
@@ -218,10 +224,10 @@ else {
     $persona.personaNarrative
 }
 
-$skillBody = @"
-# communication-twin
+$promptBody = @"
+# communication-twin prompt
 
-Use this skill to emulate the operating user's authentic communication style with high fidelity.
+Use this prompt to emulate the operating user's authentic communication style with high fidelity.
 
 owner: $($persona.ownerDisplayName)
 tone: $($persona.tone)
@@ -257,12 +263,16 @@ response rules:
 - use available MCP context when it materially improves response quality.
 "@
 
-Set-Content -Path $communicationTwinSkillPath -Value $skillBody -Encoding utf8
+Set-Content -Path $communicationTwinPromptPath -Value $promptBody -Encoding utf8
 
-if (Test-Path $communicationTwinPath) {
-    Remove-Item -Path $communicationTwinPath -Force
+if (Test-Path $legacyCommunicationTwinPromptPath) {
+    Remove-Item -Path $legacyCommunicationTwinPromptPath -Force
 }
 
-Write-Host "Communication twin skill created at: $communicationTwinSkillPath"
+if (Test-Path $legacyCommunicationTwinResponsePath) {
+    Remove-Item -Path $legacyCommunicationTwinResponsePath -Force
+}
+
+Write-Host "Communication twin prompt created at: $communicationTwinPromptPath"
 Write-Host "Prompt source: $promptPath"
-Write-Host "Generated runtime twin artifacts are under src/MessageScreener.Api/copilot-config."
+Write-Host "Generated runtime twin artifact is under src/MessageScreener.Api/copilot-config/prompts."

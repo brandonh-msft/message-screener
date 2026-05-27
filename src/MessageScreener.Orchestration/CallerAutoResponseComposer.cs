@@ -19,11 +19,11 @@ namespace MessageScreener.Orchestration
             CommunicationTwinProfile profile,
             CancellationToken cancellationToken)
         {
-            string? communicationTwinSkillContent = await ghcpAgentHarness.GetCommunicationTwinSkillContentAsync(cancellationToken);
+            string? communicationTwinPromptContent = await ghcpAgentHarness.GetCommunicationTwinPromptContentAsync(cancellationToken);
             return await copilotReplyDraftingService.DraftReplyAsync(
                 message,
                 profile,
-                communicationTwinSkillContent,
+                communicationTwinPromptContent,
                 cancellationToken);
         }
     }

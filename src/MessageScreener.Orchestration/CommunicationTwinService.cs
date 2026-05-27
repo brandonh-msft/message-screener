@@ -8,7 +8,7 @@ namespace MessageScreener.Orchestration
     {
         public const string SectionName = "MessageScreener";
 
-        public string CommunicationTwinSkillPath { get; init; } = "copilot-config/skills/communication-twin/SKILL.md";
+        public string CommunicationTwinPromptPath { get; init; } = "copilot-config/prompts/communication-twin.prompt.md";
     }
 
     public interface ICommunicationTwinService
@@ -39,33 +39,33 @@ namespace MessageScreener.Orchestration
         public CommunicationTwinProfile GetInitialProfile()
         {
             MessageScreenerAgentOptions current = options.Value;
-            var communicationTwinSkillPath = ResolveCommunicationTwinSkillPath(current.CommunicationTwinSkillPath);
+            var communicationTwinPromptPath = ResolveCommunicationTwinPromptPath(current.CommunicationTwinPromptPath);
 
-            if (!File.Exists(communicationTwinSkillPath))
+            if (!File.Exists(communicationTwinPromptPath))
             {
-                CommunicationTwinLog.SkillFileMissing(communicationTwinSkillPath, logger);
+                CommunicationTwinLog.PromptFileMissing(communicationTwinPromptPath, logger);
                 return BuildDefaultProfile();
             }
 
-            var skill = ParseSkillContent(File.ReadAllText(communicationTwinSkillPath));
+            var prompt = ParsePromptContent(File.ReadAllText(communicationTwinPromptPath));
 
-            if (skill is null || string.IsNullOrWhiteSpace(skill.OwnerDisplayName) || string.IsNullOrWhiteSpace(skill.PersonaSummary))
+            if (prompt is null || string.IsNullOrWhiteSpace(prompt.OwnerDisplayName) || string.IsNullOrWhiteSpace(prompt.PersonaSummary))
             {
-                CommunicationTwinLog.SkillFileInvalid(communicationTwinSkillPath, logger);
+                CommunicationTwinLog.PromptFileInvalid(communicationTwinPromptPath, logger);
                 return BuildDefaultProfile();
             }
 
-            var preferredPhrases = skill.PreferredPhrases.Length > 0 ? skill.PreferredPhrases : DefaultPreferredPhrases;
-            var avoidPhrases = skill.AvoidPhrases.Length > 0 ? skill.AvoidPhrases : DefaultAvoidPhrases;
+            var preferredPhrases = prompt.PreferredPhrases.Length > 0 ? prompt.PreferredPhrases : DefaultPreferredPhrases;
+            var avoidPhrases = prompt.AvoidPhrases.Length > 0 ? prompt.AvoidPhrases : DefaultAvoidPhrases;
 
-            CommunicationTwinLog.SkillFileLoaded(communicationTwinSkillPath, logger);
+            CommunicationTwinLog.PromptFileLoaded(communicationTwinPromptPath, logger);
 
             return new CommunicationTwinProfile(
-                OwnerDisplayName: skill.OwnerDisplayName,
-                PersonaSummary: skill.PersonaSummary ?? DefaultPersonaSummary,
+                OwnerDisplayName: prompt.OwnerDisplayName,
+                PersonaSummary: prompt.PersonaSummary ?? DefaultPersonaSummary,
                 PreferredPhrases: preferredPhrases,
                 AvoidPhrases: avoidPhrases,
-                Tone: skill.Tone ?? DefaultTone);
+                Tone: prompt.Tone ?? DefaultTone);
         }
 
         private static CommunicationTwinProfile BuildDefaultProfile()
@@ -78,7 +78,7 @@ namespace MessageScreener.Orchestration
                 Tone: DefaultTone);
         }
 
-        private static string ResolveCommunicationTwinSkillPath(string configuredPath)
+        private static string ResolveCommunicationTwinPromptPath(string configuredPath)
         {
             if (Path.IsPathRooted(configuredPath))
             {
@@ -88,14 +88,14 @@ namespace MessageScreener.Orchestration
             return Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), configuredPath));
         }
 
-        private static CommunicationTwinSkillModel? ParseSkillContent(string content)
+        private static CommunicationTwinPromptModel? ParsePromptContent(string content)
         {
             string? ownerDisplayName = null;
             string? personaSummary = null;
             string? tone = null;
             List<string> preferredPhrases = [];
             List<string> avoidPhrases = [];
-            SkillSection section = SkillSection.None;
+            PromptSection section = PromptSection.None;
             List<string> personaSummaryLines = [];
 
             using StringReader reader = new(content);
@@ -117,45 +117,45 @@ namespace MessageScreener.Orchestration
 
                 if (trimmed.Equals("persona summary:", StringComparison.OrdinalIgnoreCase))
                 {
-                    section = SkillSection.PersonaSummary;
+                    section = PromptSection.PersonaSummary;
                     continue;
                 }
 
                 if (trimmed.Equals("preferred phrases:", StringComparison.OrdinalIgnoreCase))
                 {
-                    section = SkillSection.PreferredPhrases;
+                    section = PromptSection.PreferredPhrases;
                     continue;
                 }
 
                 if (trimmed.Equals("avoid phrases:", StringComparison.OrdinalIgnoreCase))
                 {
-                    section = SkillSection.AvoidPhrases;
+                    section = PromptSection.AvoidPhrases;
                     continue;
                 }
 
                 if (trimmed.EndsWith(":", StringComparison.OrdinalIgnoreCase))
                 {
-                    section = SkillSection.None;
+                    section = PromptSection.None;
                     continue;
                 }
 
                 switch (section)
                 {
-                    case SkillSection.PersonaSummary:
+                    case PromptSection.PersonaSummary:
                         if (!string.IsNullOrWhiteSpace(trimmed))
                         {
                             personaSummaryLines.Add(trimmed);
                         }
 
                         break;
-                    case SkillSection.PreferredPhrases:
+                    case PromptSection.PreferredPhrases:
                         if (trimmed.StartsWith("- ", StringComparison.Ordinal))
                         {
                             preferredPhrases.Add(trimmed[2..].Trim());
                         }
 
                         break;
-                    case SkillSection.AvoidPhrases:
+                    case PromptSection.AvoidPhrases:
                         if (trimmed.StartsWith("- ", StringComparison.Ordinal))
                         {
                             avoidPhrases.Add(trimmed[2..].Trim());
@@ -175,7 +175,7 @@ namespace MessageScreener.Orchestration
                 return null;
             }
 
-            return new CommunicationTwinSkillModel(
+            return new CommunicationTwinPromptModel(
                 OwnerDisplayName: ownerDisplayName,
                 PersonaSummary: personaSummary,
                 PreferredPhrases: preferredPhrases.ToArray(),
@@ -184,14 +184,14 @@ namespace MessageScreener.Orchestration
         }
     }
 
-    internal sealed record CommunicationTwinSkillModel(
+    internal sealed record CommunicationTwinPromptModel(
         string OwnerDisplayName,
         string? PersonaSummary,
         string[] PreferredPhrases,
         string[] AvoidPhrases,
         string? Tone);
 
-    internal enum SkillSection
+    internal enum PromptSection
     {
         None = 0,
         PersonaSummary = 1,
