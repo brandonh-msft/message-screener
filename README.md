@@ -308,7 +308,7 @@ Copilot runtime readiness is also available through:
 - `POST /api/voice/rewrite`
 - `POST /api/skills/communication-twin/messages`
 - `GET /manifest/message-screener-communication-twin-skill-1.0.json`
-- `GET /openapi/v1.json`
+- `GET /swagger/v2/swagger.json`
 
 This endpoint uses the same `X-MessageScreener-Owner-Key` header and returns:
 
@@ -344,7 +344,7 @@ For Copilot Studio skill registration, use:
 - Manifest URL: `https://<your-host>/manifest/message-screener-communication-twin-skill-1.0.json`
 - Skill endpoint: `https://<your-host>/api/skills/communication-twin/messages`
 
-OpenAPI v3 is published at `GET /openapi/v1.json` and includes the simple REST rewrite contract for `POST /api/voice/rewrite`.
+Swagger/OpenAPI v2 is published at `GET /swagger/v2/swagger.json` and includes the simple REST rewrite contract for `POST /api/voice/rewrite`.
 
 Copilot Studio skill validation prerequisites:
 

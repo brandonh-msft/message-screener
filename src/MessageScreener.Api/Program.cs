@@ -86,8 +86,6 @@ builder.Services.AddOpenTelemetry()
 
 WebApplication app = builder.Build();
 
-app.MapOpenApi();
-
 app.MapGet("/health", () => Results.Ok(new
 {
     service = ServiceName,
@@ -98,6 +96,14 @@ app.MapGet("/health", () => Results.Ok(new
 app.MapGet("/privacy", () => Results.Text(
     "Message Screener processes message context to generate review-first drafts and skill responses. No automatic sends are performed.",
     "text/plain"));
+
+app.MapGet("/swagger/v2/swagger.json", (HttpRequest request) =>
+{
+    string host = request.Host.Value ?? string.Empty;
+    string scheme = string.Equals(request.Scheme, "https", StringComparison.OrdinalIgnoreCase) ? "https" : "http";
+
+    return Results.Json(BuildRewriteSwaggerV2Document(host, scheme));
+});
 
 app.MapGet("/api/audit/forwards", async (
     HttpRequest request,
@@ -807,6 +813,130 @@ static string ResolvePublicBaseUrl(HttpRequest request, string? configuredPublic
     }
 
     return $"https://{request.Host}".TrimEnd('/');
+}
+
+static Dictionary<string, object?> BuildRewriteSwaggerV2Document(string host, string scheme)
+{
+    return new Dictionary<string, object?>
+    {
+        ["swagger"] = "2.0",
+        ["info"] = new Dictionary<string, object?>
+        {
+            ["title"] = "Message Screener Rewrite API",
+            ["version"] = ServiceVersion,
+            ["description"] = "Rewrites a suggested response into the operating user's voice using the communication twin profile."
+        },
+        ["host"] = host,
+        ["basePath"] = "/",
+        ["schemes"] = new[] { scheme },
+        ["consumes"] = new[] { "application/json" },
+        ["produces"] = new[] { "application/json" },
+        ["paths"] = new Dictionary<string, object?>
+        {
+            ["/api/voice/rewrite"] = new Dictionary<string, object?>
+            {
+                ["post"] = new Dictionary<string, object?>
+                {
+                    ["summary"] = "Rewrite suggested response in the operating user's voice",
+                    ["description"] = "Accepts the original question/message, a suggested response, and supporting evidence, then rewrites the response to match the operating user's voice.",
+                    ["operationId"] = "rewriteInUserVoice",
+                    ["consumes"] = new[] { "application/json" },
+                    ["produces"] = new[] { "application/json" },
+                    ["parameters"] = new object[]
+                    {
+                        new Dictionary<string, object?>
+                        {
+                            ["name"] = "body",
+                            ["@in"] = "body",
+                            ["required"] = true,
+                            ["description"] = "Rewrite request payload.",
+                            ["schema"] = new Dictionary<string, object?>
+                            {
+                                ["$ref"] = "#/definitions/CommunicationTwinRewriteRequest"
+                            }
+                        }
+                    },
+                    ["responses"] = new Dictionary<string, object?>
+                    {
+                        ["200"] = new Dictionary<string, object?>
+                        {
+                            ["description"] = "Successfully rewritten response.",
+                            ["schema"] = new Dictionary<string, object?>
+                            {
+                                ["$ref"] = "#/definitions/CommunicationTwinRewriteResponse"
+                            }
+                        },
+                        ["400"] = new Dictionary<string, object?>
+                        {
+                            ["description"] = "Invalid request payload."
+                        }
+                    }
+                }
+            }
+        },
+        ["definitions"] = new Dictionary<string, object?>
+        {
+            ["CommunicationTwinRewriteRequest"] = new Dictionary<string, object?>
+            {
+                ["type"] = "object",
+                ["description"] = "Input used to rewrite a suggested response into the operating user's voice.",
+                ["required"] = new[] { "sourceText", "suggestedResponse" },
+                ["properties"] = new Dictionary<string, object?>
+                {
+                    ["sourceKind"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "string",
+                        ["description"] = "Whether the prompt came from an explicit query or from a received message.",
+                        ["enum"] = new[] { "Query", "Message" }
+                    },
+                    ["sourceText"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "string",
+                        ["description"] = "The original question or received message that the rewritten reply should answer."
+                    },
+                    ["suggestedResponse"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "string",
+                        ["description"] = "The draft answer that should be rewritten to sound like the operating user."
+                    },
+                    ["supportingEvidence"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "array",
+                        ["description"] = "Optional supporting facts, context, or citations that the rewrite should preserve.",
+                        ["items"] = new Dictionary<string, object?>
+                        {
+                            ["type"] = "string",
+                            ["description"] = "One piece of supporting evidence or contextual guidance."
+                        }
+                    }
+                }
+            },
+            ["CommunicationTwinRewriteResponse"] = new Dictionary<string, object?>
+            {
+                ["type"] = "object",
+                ["description"] = "Result returned after the response has been rewritten in the operating user's voice.",
+                ["required"] = new[] { "rewrittenResponse", "ownerDisplayName", "tone" },
+                ["properties"] = new Dictionary<string, object?>
+                {
+                    ["rewrittenResponse"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "string",
+                        ["description"] = "The final rewritten text that should be used as the reply draft."
+                    },
+                    ["ownerDisplayName"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "string",
+                        ["description"] = "The display name of the operating user whose voice was used."
+                    },
+                    ["tone"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "string",
+                        ["description"] = "The tone profile used while rewriting the response."
+                    }
+                }
+            }
+        }
+    };
 }
 
 static ForwardAuditEntry CreateForwardAuditEntry(TeamsInboundMessage message, MessageIntakeResult intakeResult)
